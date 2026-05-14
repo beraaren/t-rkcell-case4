@@ -5,7 +5,7 @@ import { AppHeader } from "@/components/AppHeader";
 import { CourseCard } from "@/components/CourseCard";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { courses as coursesApi } from "@/lib/api";
+import { courses as coursesApi, me as meApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
 export const Route = createFileRoute("/courses")({ component: CoursesPage });
@@ -22,6 +22,8 @@ function CoursesPage() {
   const [courseList, setCourseList] = useState<any[]>([]);
   const [cats, setCats] = useState<string[]>([]);
   const [instructors, setInstructors] = useState<{ id: string; name: string }[]>([]);
+  const [progressMap, setProgressMap] = useState<Record<string, number>>({});
+  const [certCourseIds, setCertCourseIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (isChildRoute) return;
@@ -34,6 +36,22 @@ function CoursesPage() {
       setCourseList(data);
     }).catch(() => {});
   }, [q, category, level, instructorId, isChildRoute]);
+
+  useEffect(() => {
+    if (isChildRoute || !user) return;
+    meApi.courses().then((items: any[]) => {
+      const map: Record<string, number> = {};
+      (items ?? []).forEach((it: any) => {
+        const cid = it.course?.id ?? it.courseId ?? it.id;
+        const pct = it.progressPct ?? it.progress ?? 0;
+        if (cid) map[cid] = pct;
+      });
+      setProgressMap(map);
+    }).catch(() => {});
+    meApi.certificates().then((cs: any[]) => {
+      setCertCourseIds(new Set((cs ?? []).map((c) => c.courseId)));
+    }).catch(() => {});
+  }, [isChildRoute, user]);
 
   useEffect(() => {
     if (isChildRoute) return;
@@ -95,7 +113,14 @@ function CoursesPage() {
           <div className="text-center py-16 text-muted-foreground">Sonuç bulunamadı.</div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-            {courseList.map((c) => <CourseCard key={c.id} course={c} />)}
+            {courseList.map((c) => (
+              <CourseCard
+                key={c.id}
+                course={c}
+                progress={progressMap[c.id]}
+                completed={certCourseIds.has(c.id)}
+              />
+            ))}
           </div>
         )}
       </main>

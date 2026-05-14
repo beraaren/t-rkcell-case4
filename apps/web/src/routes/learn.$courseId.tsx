@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
 import { courses as coursesApi, lessons as lessonsApi, interactions, notes as notesApi } from "@/lib/api";
+import { LessonChat } from "@/components/LessonChat";
 
 export const Route = createFileRoute("/learn/$courseId")({
   component: LearnPage,
@@ -377,6 +378,13 @@ function LearnPage() {
           </Card>
         </aside>
       </div>
+
+      {currentLesson && (
+        <LessonChat
+          lessonId={currentLesson.id}
+          contextLabel={`${currentLesson._moduleTitle} · ${currentLesson.title}`}
+        />
+      )}
     </div>
   );
 }

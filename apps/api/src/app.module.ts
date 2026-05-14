@@ -13,6 +13,7 @@ import { InteractionsModule } from './interactions/interactions.module';
 import { AdminModule } from './admin/admin.module';
 import { LeaderboardModule } from './leaderboard/leaderboard.module';
 import { NotesModule } from './notes/notes.module';
+import { AiModule } from './ai/ai.module';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { RolesGuard } from './common/guards/roles.guard';
 
@@ -30,6 +31,7 @@ import { RolesGuard } from './common/guards/roles.guard';
     AdminModule,
     LeaderboardModule,
     NotesModule,
+    AiModule,
   ],
   controllers: [AppController],
   providers: [

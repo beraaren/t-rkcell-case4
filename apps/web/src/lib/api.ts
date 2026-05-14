@@ -219,6 +219,15 @@ export const leaderboard = {
   get: (limit = 50) => request<any[]>(`/leaderboard?limit=${limit}`),
 };
 
+// ── AI ────────────────────────────────────────────────────────────────
+export const ai = {
+  chat: (body: { lessonId?: string; moduleId?: string; messages: { role: "user" | "assistant"; content: string }[] }) =>
+    request<{ reply: string }>("/ai/chat", { method: "POST", body: JSON.stringify(body) }),
+
+  generateQuestions: (body: { moduleId: string; count?: number }) =>
+    request<{ created: number; questions: any[] }>("/ai/generate-questions", { method: "POST", body: JSON.stringify(body) }),
+};
+
 // ── NOTES ─────────────────────────────────────────────────────────────
 export const notes = {
   get: (lessonId: string) => request<any>(`/lessons/${lessonId}/notes`),

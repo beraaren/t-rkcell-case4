@@ -40,9 +40,12 @@ function ResultPage() {
         const modules: any[] = curriculum.modules ?? [];
         const modIdx = modules.findIndex((m: any) => m.exam?.id === examId);
 
+        // Kurs zaten tamamlandıysa (sertifika var) ASLA sıfırlama
+        const hasCertForThisCourse = (cs as any[])?.some((c: any) => c.courseId === courseId);
+
         // Hak bitti & geçemedi → modülün tüm tamamlanmış dersleri sıfırla
         const failed = !(r.passed) && remaining === 0;
-        if (failed && modIdx !== -1) {
+        if (failed && modIdx !== -1 && !hasCertForThisCourse) {
           const mod = modules[modIdx];
           const completed = (mod.lessons ?? []).filter((l: any) => l.isCompleted);
           await Promise.allSettled(completed.map((l: any) => lessonsApi.uncomplete(l.id)));

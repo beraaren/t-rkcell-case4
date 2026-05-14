@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Plus, Pencil, Trash2, Video, FileQuestion, Save, Settings2, Check, CircleDot } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Video, FileQuestion, Save, Settings2, Check, CircleDot, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { Card } from "@/components/ui/card";
@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/lib/auth";
-import { courses as coursesApi, modules as modulesApi, lessons as lessonsApi, exams as examsApi } from "@/lib/api";
+import { courses as coursesApi, modules as modulesApi, lessons as lessonsApi, exams as examsApi, ai as aiApi } from "@/lib/api";
 
 export const Route = createFileRoute("/instructor/$courseId")({ component: CourseEditor });
 
@@ -41,6 +41,8 @@ function CourseEditor() {
   const [examOpen, setExamOpen] = useState<{ moduleId: string; examId?: string } | null>(null);
   const [examForm, setExamForm] = useState<ExamForm>({ timeLimitMin: 15, passingScore: 60, maxAttempts: 3, questionCount: null, shuffle: true });
   const [examQuestions, setExamQuestions] = useState<any[]>([]);
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiCount, setAiCount] = useState(5);
   const [qForm, setQForm] = useState<{ type: string; text: string; options: { id: string; text: string; isCorrect: boolean }[] }>({
     type: "MULTIPLE_CHOICE",
     text: "",
@@ -285,6 +287,23 @@ function CourseEditor() {
     loadAll();
   };
 
+  const generateAiQuestions = async () => {
+    if (!examOpen?.examId) {
+      const id = await saveExam(false);
+      if (!id) return;
+    }
+    setAiGenerating(true);
+    try {
+      const res = await aiApi.generateQuestions({ moduleId: examOpen!.moduleId, count: aiCount });
+      toast.success(`${res.created} soru AI ile üretildi`);
+      if (examOpen?.examId) await loadExamQuestions(examOpen.examId);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
@@ -505,11 +524,33 @@ function CourseEditor() {
               </div>
             )}
 
+            {/* AI Auto-generate */}
+            {examOpen?.examId && (
+              <div className="border-t pt-4 space-y-3">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-violet-600" /> AI ile Otomatik Soru Üret
+                </h4>
+                <p className="text-xs text-muted-foreground">
+                  Modül başlığı, açıklaması ve ders içeriklerine göre GPT soruları üretip otomatik ekler.
+                </p>
+                <div className="flex items-end gap-2">
+                  <div className="w-24">
+                    <Label>Soru sayısı</Label>
+                    <Input type="number" min={1} max={15} value={aiCount} onChange={(e) => setAiCount(Math.min(15, Math.max(1, Number(e.target.value) || 5)))} />
+                  </div>
+                  <Button onClick={generateAiQuestions} disabled={aiGenerating} className="bg-violet-600 hover:bg-violet-700">
+                    {aiGenerating ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Sparkles className="w-4 h-4 mr-1.5" />}
+                    {aiGenerating ? "Üretiliyor..." : "Oto Soru Üret"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
             {/* New question form */}
             {examOpen?.examId && (
               <div className="space-y-3 border-t pt-4">
                 <h4 className="text-sm font-semibold flex items-center gap-2">
-                  <Plus className="w-4 h-4 text-violet-600" /> Yeni Soru
+                  <Plus className="w-4 h-4 text-violet-600" /> Yeni Soru (Manuel)
                 </h4>
                 <div className="grid sm:grid-cols-3 gap-3">
                   <div className="sm:col-span-1">

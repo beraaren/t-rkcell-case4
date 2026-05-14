@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
-import { courses as coursesApi, interactions } from "@/lib/api";
+import { courses as coursesApi, interactions, me as meApi } from "@/lib/api";
 
 export const Route = createFileRoute("/courses/$id")({ component: CourseDetail });
 
@@ -44,6 +44,7 @@ function CourseDetail() {
   const [curriculum, setCurriculum] = useState<any>(null);
   const [reviews, setReviews] = useState<any[]>([]);
   const [recommended, setRecommended] = useState<any[]>([]);
+  const [certificate, setCertificate] = useState<any | null>(null);
   const [rating, setRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
   const [fetching, setFetching] = useState(true);
@@ -59,12 +60,15 @@ function CourseDetail() {
       interactions.getReviews(id).catch(() => []),
       user ? coursesApi.curriculum(id).catch(() => null) : Promise.resolve(null),
       coursesApi.recommendations(id, 4).catch(() => []),
-    ]).then(([c, r, cur, rec]) => {
+      user ? meApi.certificates().catch(() => []) : Promise.resolve([]),
+    ]).then(([c, r, cur, rec, certs]) => {
       if (cancelled) return;
       setCourse(c);
       setReviews(Array.isArray(r) ? r : []);
       if (cur) setCurriculum(cur);
       setRecommended(Array.isArray(rec) ? rec : []);
+      const myCert = Array.isArray(certs) ? certs.find((x: any) => x.courseId === id) : null;
+      setCertificate(myCert ?? null);
       setFetching(false);
     }).catch(() => { if (!cancelled) setFetching(false); });
     return () => { cancelled = true; };
@@ -76,7 +80,7 @@ function CourseDetail() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  const enrolled = !!course?.isEnrolled;
+  const enrolled = !!course?.isEnrolled || !!certificate;
 
   const modules: any[] = useMemo(() => {
     if (enrolled && curriculum?.modules) return curriculum.modules;
@@ -97,7 +101,7 @@ function CourseDetail() {
     : null;
 
   const allExamsPassed = modules.every((m) => !m.exam || m.exam.passed);
-  const courseCompleted = enrolled && totalLessons > 0 && completedLessons === totalLessons && allExamsPassed;
+  const courseCompleted = !!certificate || (enrolled && totalLessons > 0 && completedLessons === totalLessons && allExamsPassed);
 
   if (loading || fetching) return null;
   if (!user) return <Navigate to="/login" />;
@@ -133,17 +137,70 @@ function CourseDetail() {
     });
   };
 
-  const CTAButton = ({ className }: { className?: string }) =>
-    enrolled ? (
+  const isArchived = course?.status === "ARCHIVED";
+
+  const CTAButton = ({ className }: { className?: string }) => {
+    if (isArchived && !enrolled) {
+      return (
+        <Button disabled className={`bg-zinc-500 ${className ?? ""}`}>
+          Eğitim Sonlandı
+        </Button>
+      );
+    }
+    if (!enrolled) {
+      return (
+        <Button className={`bg-violet-600 hover:bg-violet-700 ${className ?? ""}`} onClick={onEnroll}>
+          Ücretsiz Kayıt Ol
+        </Button>
+      );
+    }
+    if (courseCompleted) {
+      return (
+        <Button className={`bg-green-600 hover:bg-green-700 ${className ?? ""}`}
+          onClick={() => nav({ to: "/learn/$courseId", params: { courseId: id } })}>
+          <Trophy className="w-4 h-4 mr-1.5" /> Eğitim Bitti · Yeniden İncele
+        </Button>
+      );
+    }
+    return (
       <Button className={`bg-violet-600 hover:bg-violet-700 ${className ?? ""}`}
         onClick={() => nav({ to: "/learn/$courseId", params: { courseId: id } })}>
-        {progressPct > 0 ? "Devam Et" : "Öğrenmeye Başla"}
-      </Button>
-    ) : (
-      <Button className={`bg-violet-600 hover:bg-violet-700 ${className ?? ""}`} onClick={onEnroll}>
-        Ücretsiz Kayıt Ol
+        {progressPct > 0 ? "Devam Ediyor · Sürdür" : "Öğrenmeye Başla"}
       </Button>
     );
+  };
+
+  const StatusLabel = () => {
+    if (courseCompleted) {
+      return (
+        <div className="text-xs font-semibold flex items-center gap-1.5 text-green-700 dark:text-green-400 bg-green-500/10 border border-green-500/30 rounded-full px-2.5 py-1 w-fit">
+          <Trophy className="w-3 h-3" /> Eğitim Bitti
+        </div>
+      );
+    }
+    if (enrolled && progressPct > 0) {
+      return (
+        <div className="text-xs font-semibold flex items-center gap-1.5 text-violet-700 dark:text-violet-300 bg-violet-500/10 border border-violet-500/30 rounded-full px-2.5 py-1 w-fit">
+          <CheckCircle2 className="w-3 h-3" /> Devam Ediyor · %{progressPct}
+        </div>
+      );
+    }
+    if (enrolled) {
+      return (
+        <div className="text-xs font-semibold flex items-center gap-1.5 text-amber-700 dark:text-amber-300 bg-amber-500/10 border border-amber-500/30 rounded-full px-2.5 py-1 w-fit">
+          Kayıtlısın · Henüz başlamadın
+        </div>
+      );
+    }
+    if (isArchived) {
+      return (
+        <div className="text-xs font-semibold flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 bg-zinc-500/10 border border-zinc-500/30 rounded-full px-2.5 py-1 w-fit">
+          Eğitim sonlandırıldı
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-0">
@@ -164,6 +221,11 @@ function CourseDetail() {
             <div className="flex flex-wrap gap-2">
               {course.category && <Badge className="bg-white/20 text-white border-0">{course.category}</Badge>}
               {course.level && <Badge className="bg-white/20 text-white border-0">{levelLabel[course.level] ?? course.level}</Badge>}
+              {courseCompleted && (
+                <Badge className="bg-green-500 text-white border-0">
+                  <Trophy className="w-3 h-3 mr-1" /> Tamamlandı
+                </Badge>
+              )}
             </div>
             <h1 className="text-3xl md:text-4xl font-bold leading-tight">{course.title}</h1>
             <p className="text-white/80 text-lg">{course.description}</p>
@@ -192,6 +254,7 @@ function CourseDetail() {
             <Card className="p-0 overflow-hidden bg-white text-foreground shadow-2xl sticky top-24">
               <CourseCover title={course.title} coverUrl={course.coverUrl} className="aspect-[16/9]" />
               <div className="p-5 space-y-4">
+                <StatusLabel />
                 {enrolled && (
                   <div className="space-y-1">
                     <div className="flex justify-between text-sm">
@@ -204,7 +267,14 @@ function CourseDetail() {
                 )}
 
                 <CTAButton className="w-full" />
-                {!enrolled && <p className="text-xs text-center text-muted-foreground">Hemen başla, istediğin zaman ilerle</p>}
+                {!enrolled && !isArchived && <p className="text-xs text-center text-muted-foreground">Hemen başla, istediğin zaman ilerle</p>}
+                {certificate && (
+                  <Link to="/profile" className="block">
+                    <Button variant="outline" className="w-full">
+                      <Trophy className="w-4 h-4 mr-1.5 text-violet-600" /> Sertifikanı Gör
+                    </Button>
+                  </Link>
+                )}
 
                 <div className="border-t pt-4 space-y-2 text-sm">
                   <div className="flex justify-between text-muted-foreground">

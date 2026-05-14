@@ -4,20 +4,6 @@ import * as bcrypt from 'bcrypt';
 const prisma = new PrismaClient();
 
 async function main() {
-  // Wipe
-  await prisma.userAnswer.deleteMany();
-  await prisma.examAttempt.deleteMany();
-  await prisma.certificate.deleteMany();
-  await prisma.lessonProgress.deleteMany();
-  await prisma.enrollment.deleteMany();
-  await prisma.comment.deleteMany();
-  await prisma.review.deleteMany();
-  await prisma.question.deleteMany();
-  await prisma.exam.deleteMany();
-  await prisma.lesson.deleteMany();
-  await prisma.module.deleteMany();
-  await prisma.course.deleteMany();
-
   const hash = async (p: string) => bcrypt.hash(p, 10);
 
   // Users — upsert (varsa dokunma)
@@ -67,6 +53,17 @@ async function main() {
       role: Role.STUDENT,
     },
   });
+
+  // Idempotent: eğer demo kurslar zaten varsa course graph'ı oluşturma
+  const existingDemoCount = await prisma.course.count({ where: { instructorId: instructor.id } });
+  if (existingDemoCount > 0) {
+    console.log(`✅ ${existingDemoCount} demo kurs mevcut, course seed atlandı (kullanıcı progress'i korundu)`);
+    console.log('Instructor: 05551112233 / Test1234');
+    console.log('Student:    05554445566 / Test1234');
+    console.log('Admin:      05557778899 / Test1234');
+    console.log('Bera:       05550000000 / Bera1234');
+    return;
+  }
 
   const coursesData = [
     {
