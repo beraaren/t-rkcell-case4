@@ -1,12 +1,12 @@
 import { createFileRoute, Link, Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { CheckCircle2, XCircle, Trophy, RotateCcw, Award } from "lucide-react";
+import { CheckCircle2, XCircle, Trophy, RotateCcw, Award, ArrowRight } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
-import { exams as examsApi, me as meApi } from "@/lib/api";
+import { exams as examsApi, me as meApi, courses as coursesApi, lessons as lessonsApi } from "@/lib/api";
 
 export const Route = createFileRoute("/learn/$courseId/exam/$examId/result")({
   component: ResultPage,
@@ -19,6 +19,8 @@ function ResultPage() {
 
   const [result, setResult] = useState<any>(null);
   const [certs, setCerts] = useState<any[]>([]);
+  const [remainingAttempts, setRemainingAttempts] = useState<number>(1);
+  const [nextLessonId, setNextLessonId] = useState<string | null>(null);
   const [fetching, setFetching] = useState(true);
 
   useEffect(() => {
@@ -26,9 +28,33 @@ function ResultPage() {
       Promise.all([
         examsApi.result(examId),
         meApi.certificates(),
-      ]).then(([r, cs]) => {
+        examsApi.attempts(examId),
+        coursesApi.curriculum(courseId),
+      ]).then(async ([r, cs, att, curriculum]) => {
         setResult(r);
         setCerts(cs);
+        const remaining = (att as any).remaining ?? 0;
+        setRemainingAttempts(remaining);
+
+        // Curriculum'dan bu exam'ın modülünü bul
+        const modules: any[] = curriculum.modules ?? [];
+        const modIdx = modules.findIndex((m: any) => m.exam?.id === examId);
+
+        // Hak bitti & geçemedi → modülün tüm tamamlanmış dersleri sıfırla
+        const failed = !(r.passed) && remaining === 0;
+        if (failed && modIdx !== -1) {
+          const mod = modules[modIdx];
+          const completed = (mod.lessons ?? []).filter((l: any) => l.isCompleted);
+          await Promise.allSettled(completed.map((l: any) => lessonsApi.uncomplete(l.id)));
+        }
+
+        // Sonraki modülün ilk dersini bul (geçtiyse veya hak bittiyse)
+        const canContinue = r.passed || (remaining === 0);
+        if (canContinue && modIdx !== -1 && modIdx + 1 < modules.length) {
+          const nextMod = modules[modIdx + 1];
+          const firstLesson = (nextMod.lessons ?? [])[0];
+          if (firstLesson) setNextLessonId(firstLesson.id);
+        }
       }).catch(() => {}).finally(() => setFetching(false));
     }
   }, [examId, loading, user]);
@@ -37,7 +63,11 @@ function ResultPage() {
   if (!user) return <Navigate to="/login" />;
   if (!result) return <div className="min-h-screen"><AppHeader /><div className="p-8">Sonuç bulunamadı.</div></div>;
 
-  const { attempt, exam, passed, score, correct, total } = result;
+  const passed = result.passed;
+  const score = Math.round(result.score ?? 0);
+  const feedback = result.feedback ?? [];
+  const correct = feedback.filter((q: any) => q.pointEarned >= q.maxPoint).length;
+  const total = feedback.length;
   const cert = certs.find((c: any) => c.courseId === courseId);
 
   return (
@@ -49,9 +79,15 @@ function ResultPage() {
           <h1 className="text-2xl font-bold mt-3">{passed ? "Tebrikler, geçtin!" : "Bu sefer olmadı"}</h1>
           <div className="mt-4 text-5xl font-bold tabular-nums">{score}<span className="text-lg text-muted-foreground">/100</span></div>
           <div className="mt-2 text-sm text-muted-foreground">
-            Geçme notu: %{exam?.passingScore} · {correct}/{total} tam doğru
-            {attempt?.status === "EXPIRED" && <Badge variant="destructive" className="ml-2">Süre doldu</Badge>}
+            Geçme notu: %{result.passingScore} · {correct}/{total} tam doğru
+            {result.status === "EXPIRED" && <Badge variant="destructive" className="ml-2">Süre doldu</Badge>}
           </div>
+          {!passed && remainingAttempts > 0 && (
+            <div className="mt-2 text-xs text-muted-foreground">Kalan deneme hakkı: {remainingAttempts}</div>
+          )}
+          {!passed && remainingAttempts === 0 && (
+            <div className="mt-2 text-xs text-destructive font-medium">Deneme hakkın doldu.</div>
+          )}
         </Card>
 
         {cert && (
@@ -71,20 +107,25 @@ function ResultPage() {
           <Button variant="outline" onClick={() => nav({ to: "/learn/$courseId", params: { courseId } })}>
             Kursa Dön
           </Button>
-          {!passed && (
+          {!passed && remainingAttempts > 0 && (
             <Button onClick={() => nav({ to: "/learn/$courseId/exam/$examId", params: { courseId, examId } })}>
               <RotateCcw className="w-4 h-4 mr-1" /> Tekrar Dene
             </Button>
           )}
+          {(passed || remainingAttempts === 0) && nextLessonId && (
+            <Button onClick={() => nav({ to: "/learn/$courseId", params: { courseId }, search: { lessonId: nextLessonId } })}>
+              Devam Et <ArrowRight className="w-4 h-4 ml-1" />
+            </Button>
+          )}
         </div>
 
-        {result.questions && (
+        {feedback.length > 0 && (
           <Card className="p-6">
             <h2 className="text-lg font-semibold mb-4">Soru Bazlı Geri Bildirim</h2>
             <div className="space-y-3">
-              {result.questions.map((q: any, i: number) => {
+              {feedback.map((q: any, i: number) => {
                 const sel = new Set(q.selectedOptionIds ?? []);
-                const correctIds = new Set((q.options ?? []).filter((o: any) => o.isCorrect).map((o: any) => o.id));
+                const correctIds = new Set(q.correctOptionIds ?? []);
                 const fullyCorrect = sel.size === correctIds.size && [...sel].every((s) => correctIds.has(s));
                 return (
                   <div key={q.id} className="border rounded-lg p-4">
@@ -96,7 +137,7 @@ function ResultPage() {
                         <div className="mt-3 space-y-1">
                           {(q.options ?? []).map((opt: any) => {
                             const isSel = sel.has(opt.id);
-                            const isCorrect = correctIds.has(opt.id);
+                            const isCorrect = correctIds.has(opt.id) || opt.isCorrect;
                             return (
                               <div
                                 key={opt.id}

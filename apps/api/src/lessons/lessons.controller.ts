@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Patch, Body, Param } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, Param } from '@nestjs/common';
 import { LessonsService } from './lessons.service';
 import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UpdateLessonDto } from './dto/update-lesson.dto';
@@ -35,9 +35,13 @@ export class LessonsController {
     return this.lessonsService.update(id, user.id, dto);
   }
 
-  @Roles(Role.STUDENT)
   @Patch('lessons/:id/complete')
   complete(@Param('id') id: string, @CurrentUser() user: any) {
     return this.lessonsService.complete(id, user.id);
+  }
+
+  @Delete('lessons/:id/complete')
+  uncomplete(@Param('id') id: string, @CurrentUser() user: any) {
+    return this.lessonsService.uncomplete(id, user.id);
   }
 }

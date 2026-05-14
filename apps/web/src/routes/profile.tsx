@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Navigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Award, ExternalLink } from "lucide-react";
+import { Award, ExternalLink, Download } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { Card } from "@/components/ui/card";
@@ -9,7 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
-import { me as meApi } from "@/lib/api";
+import { me as meApi, certificates as certsApi } from "@/lib/api";
+import { downloadCertPdf } from "@/lib/cert-pdf";
 
 export const Route = createFileRoute("/profile")({ component: ProfilePage });
 
@@ -68,11 +69,32 @@ function ProfilePage() {
                   <div className="font-semibold">{c.courseTitle ?? c.course?.title}</div>
                   <div className="text-xs text-muted-foreground font-mono">{c.number}</div>
                   <div className="text-xs text-muted-foreground">{new Date(c.issuedAt).toLocaleDateString("tr-TR")}</div>
-                  <Button asChild size="sm" variant="outline" className="w-full">
-                    <Link to="/verify/$number" params={{ number: c.number }} target="_blank">
-                      Doğrulama Sayfası <ExternalLink className="w-3 h-3 ml-1" />
-                    </Link>
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button asChild size="sm" variant="outline" className="flex-1">
+                      <Link to="/verify/$number" params={{ number: c.number }} target="_blank">
+                        Doğrula <ExternalLink className="w-3 h-3 ml-1" />
+                      </Link>
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="default"
+                      className="flex-1"
+                      onClick={async () => {
+                        const data = await certsApi.verify(c.number);
+                        downloadCertPdf({
+                          userName: data.user?.name ?? user.name,
+                          courseTitle: data.course?.title ?? c.course?.title ?? "",
+                          category: data.course?.category ?? c.course?.category ?? "",
+                          level: data.course?.level ?? c.course?.level ?? "",
+                          issuedAt: c.issuedAt,
+                          number: c.number,
+                          verifyUrl: `${window.location.origin}/verify/${c.number}`,
+                        });
+                      }}
+                    >
+                      <Download className="w-3 h-3 mr-1" /> İndir
+                    </Button>
+                  </div>
                 </div>
               ))}
             </div>

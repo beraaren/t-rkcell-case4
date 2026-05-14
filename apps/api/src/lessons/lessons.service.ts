@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLessonDto } from './dto/create-lesson.dto';
 import { UpdateLessonDto } from './dto/update-lesson.dto';
@@ -49,5 +49,12 @@ export class LessonsService {
     });
 
     return { message: 'Ders tamamlandı' };
+  }
+
+  async uncomplete(lessonId: string, userId: string) {
+    const lesson = await this.prisma.lesson.findUnique({ where: { id: lessonId } });
+    if (!lesson) throw new NotFoundException('Ders bulunamadı');
+    await this.prisma.lessonProgress.deleteMany({ where: { userId, lessonId } });
+    return { message: 'Ders ilerleme sıfırlandı' };
   }
 }

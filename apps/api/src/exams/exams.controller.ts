@@ -45,13 +45,11 @@ export class ExamsController {
   }
 
   // Student
-  @Roles(Role.STUDENT)
   @Post('exams/:examId/start')
   startAttempt(@Param('examId') examId: string, @CurrentUser() user: any) {
     return this.examsService.startAttempt(examId, user.id);
   }
 
-  @Roles(Role.STUDENT)
   @Post('exams/:examId/submit')
   submitAttempt(
     @Param('examId') examId: string,

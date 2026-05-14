@@ -82,6 +82,7 @@ export class ExamsService {
         questions: { orderBy: { orderIndex: 'asc' } },
         module: {
           include: {
+            lessons: { select: { id: true } },
             course: { include: { modules: { orderBy: { orderIndex: 'asc' }, include: { exam: true } } } },
           },
         },
@@ -115,9 +116,9 @@ export class ExamsService {
       }
     }
 
-    // Attempt limit check (count non-IN_PROGRESS: expired + submitted count toward limit)
+    // Attempt limit check — only SUBMITTED + EXPIRED count, not IN_PROGRESS
     const usedAttempts = await this.prisma.examAttempt.count({
-      where: { userId, examId },
+      where: { userId, examId, status: { not: AttemptStatus.IN_PROGRESS } },
     });
     if (usedAttempts >= exam.maxAttempts) {
       throw new ForbiddenException(`Maksimum deneme hakkını (${exam.maxAttempts}) kullandınız`);
@@ -192,7 +193,7 @@ export class ExamsService {
   async getResult(examId: string, userId: string) {
     const attempt = await this.prisma.examAttempt.findFirst({
       where: { userId, examId, status: { in: [AttemptStatus.SUBMITTED, AttemptStatus.EXPIRED] } },
-      orderBy: { submittedAt: 'desc' },
+      orderBy: { score: 'desc' },
       include: {
         answers: true,
         exam: { include: { questions: true } },
@@ -240,13 +241,25 @@ export class ExamsService {
       orderBy: { startedAt: 'desc' },
     });
 
-    const remaining = exam.maxAttempts - attempts.length;
+    const usedCount = attempts.filter(a => a.status !== AttemptStatus.IN_PROGRESS).length;
+    const remaining = exam.maxAttempts - usedCount;
     return { attempts, remaining: Math.max(0, remaining), maxAttempts: exam.maxAttempts };
   }
 
   // ── Private helpers ─────────────────────────────────────────────────
 
   private async checkModuleLock(mod: any, userId: string) {
+    // Bu modülün tüm dersleri tamamlanmış olmalı
+    const lessonIds = (mod.lessons as Array<{ id: string }>).map(l => l.id);
+    if (lessonIds.length > 0) {
+      const completedCount = await this.prisma.lessonProgress.count({
+        where: { userId, lessonId: { in: lessonIds } },
+      });
+      if (completedCount < lessonIds.length) {
+        throw new ForbiddenException('Sınava girebilmek için modüldeki tüm dersleri tamamlamanız gerekiyor');
+      }
+    }
+
     const courseModules = mod.course.modules as Array<{ id: string; orderIndex: number; exam: any }>;
     const sortedModules = [...courseModules].sort((a, b) => a.orderIndex - b.orderIndex);
     const modIndex = sortedModules.findIndex(m => m.id === mod.id);

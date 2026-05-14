@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Navigate, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Lock, CheckCircle2, Circle, FileText, MessageSquare, Send, PlayCircle } from "lucide-react";
 import { toast } from "sonner";
@@ -11,15 +11,23 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
 import { courses as coursesApi, lessons as lessonsApi, interactions } from "@/lib/api";
 
-export const Route = createFileRoute("/learn/$courseId")({ component: LearnPage });
+export const Route = createFileRoute("/learn/$courseId")({
+  component: LearnPage,
+  validateSearch: (s: Record<string, unknown>): { lessonId?: string } => ({
+    ...(s.lessonId ? { lessonId: s.lessonId as string } : {}),
+  }),
+});
 
 function LearnPage() {
   const { courseId } = Route.useParams();
+  const { lessonId: initialLessonId } = Route.useSearch();
   const { user, loading } = useAuth();
   const nav = useNavigate();
+  const routerState = useRouterState();
+  const isChildRoute = routerState.location.pathname !== `/learn/${courseId}`;
 
   const [curriculum, setCurriculum] = useState<any>(null);
-  const [activeLessonId, setActiveLessonId] = useState<string | null>(null);
+  const [activeLessonId, setActiveLessonId] = useState<string | null>(initialLessonId ?? null);
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState("");
   const [fetching, setFetching] = useState(true);
@@ -50,6 +58,7 @@ function LearnPage() {
     }
   }, [currentLesson?.id]);
 
+  if (isChildRoute) return <Outlet />;
   if (loading || fetching) return null;
   if (!user) return <Navigate to="/login" />;
   if (!curriculum) return (
@@ -131,22 +140,27 @@ function LearnPage() {
                             </li>
                           );
                         })}
-                        {m.exam && (
+                        {m.exam && (() => {
+                          const allDone = modLessons.length > 0 && modLessons.every((l: any) => l.isCompleted);
+                          return (
                           <li>
                             <button
-                              onClick={() => nav({ to: "/learn/$courseId/exam/$examId", params: { courseId, examId: m.exam.id } })}
-                              className="w-full text-left px-2 py-1.5 rounded text-sm flex items-center gap-2 hover:bg-muted"
+                              onClick={() => allDone && nav({ to: "/learn/$courseId/exam/$examId", params: { courseId, examId: m.exam.id } })}
+                              disabled={!allDone}
+                              className={`w-full text-left px-2 py-1.5 rounded text-sm flex items-center gap-2 transition-colors ${allDone ? "hover:bg-muted" : "opacity-50 cursor-not-allowed"}`}
                             >
                               <FileText className="w-3.5 h-3.5 text-muted-foreground" />
                               <span>Modül Sınavı</span>
-                              {m.exam.bestScore != null && (
+                              {!allDone && <span className="ml-auto text-[10px] text-muted-foreground">Dersleri bitir</span>}
+                              {allDone && m.exam.bestScore != null && (
                                 <Badge variant={passed ? "default" : "destructive"} className="ml-auto text-[10px] px-1.5">
                                   {m.exam.bestScore}
                                 </Badge>
                               )}
                             </button>
                           </li>
-                        )}
+                          );
+                        })()}
                       </ul>
                     )}
                   </div>

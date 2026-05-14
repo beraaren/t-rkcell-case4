@@ -126,6 +126,8 @@ export const lessons = {
 
   complete: (id: string) =>
     request<any>(`/lessons/${id}/complete`, { method: "PATCH" }),
+  uncomplete: (id: string) =>
+    request<any>(`/lessons/${id}/complete`, { method: "DELETE" }),
 };
 
 // ── EXAMS ─────────────────────────────────────────────────────────────

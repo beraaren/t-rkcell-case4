@@ -1,4 +1,4 @@
-import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +18,9 @@ function ExamPage() {
   const { courseId, examId } = Route.useParams();
   const { user, loading } = useAuth();
   const nav = useNavigate();
+  const routerState = useRouterState();
+  const isChildRoute = routerState.location.pathname !== `/learn/${courseId}/exam/${examId}`;
+  if (isChildRoute) return <Outlet />;
 
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState<any>(null);
