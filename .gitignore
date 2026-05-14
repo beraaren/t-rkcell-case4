@@ -1,0 +1,11 @@
+node_modules/
+.pnpm-store/
+dist/
+.dist/
+build/
+.cache/
+.tanstack/
+.wrangler/
+*.env
+.env.*
+!.env.example

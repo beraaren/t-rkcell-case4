@@ -172,13 +172,13 @@ export class CoursesService {
 
       return {
         ...mod,
-        locked,
+        isUnlocked: !locked,
         lessons: mod.lessons.map(l => ({
           id: l.id,
           title: l.title,
           estimatedDuration: l.estimatedDuration,
           orderIndex: l.orderIndex,
-          completed: l.progress.length > 0,
+          isCompleted: l.progress.length > 0,
         })),
         exam: mod.exam ? {
           id: mod.exam.id,
@@ -193,7 +193,7 @@ export class CoursesService {
       };
     });
 
-    return { courseId, modules };
+    return { courseId, title: course.title, modules };
   }
 
   async getInstructorCourses(instructorId: string) {
