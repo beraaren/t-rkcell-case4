@@ -18,4 +18,9 @@ export class CreateExamDto {
   @IsInt()
   @Min(1)
   maxAttempts?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  questionCount?: number;
 }

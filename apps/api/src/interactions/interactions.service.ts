@@ -70,6 +70,36 @@ export class InteractionsService {
     });
     if (!enrollment) throw new ForbiddenException('Bu kursa kayıtlı olmayan kullanıcılar değerlendirme yapamaz');
 
+    // Completion gate: tüm dersler tamamlandı + tüm sınavlar geçildi
+    const course = await this.prisma.course.findUnique({
+      where: { id: courseId },
+      include: {
+        modules: {
+          include: {
+            lessons: { select: { id: true } },
+            exam: { select: { id: true, passingScore: true } },
+          },
+        },
+      },
+    });
+    if (!course) throw new ForbiddenException('Kurs bulunamadı');
+
+    const allLessonIds = course.modules.flatMap(m => m.lessons.map(l => l.id));
+    const completedCount = await this.prisma.lessonProgress.count({
+      where: { userId, lessonId: { in: allLessonIds } },
+    });
+    if (allLessonIds.length === 0 || completedCount < allLessonIds.length) {
+      throw new ForbiddenException('Kursu tamamlamadan değerlendirme yapamazsınız');
+    }
+
+    for (const m of course.modules) {
+      if (!m.exam) continue;
+      const passed = await this.prisma.examAttempt.findFirst({
+        where: { userId, examId: m.exam.id, status: 'SUBMITTED', score: { gte: m.exam.passingScore } },
+      });
+      if (!passed) throw new ForbiddenException('Tüm modül sınavlarını geçmeden değerlendirme yapamazsınız');
+    }
+
     const existing = await this.prisma.review.findUnique({
       where: { courseId_userId: { courseId, userId } },
     });

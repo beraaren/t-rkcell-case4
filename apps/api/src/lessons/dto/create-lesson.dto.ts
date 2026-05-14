@@ -1,4 +1,4 @@
-import { IsString, IsInt, Min } from 'class-validator';
+import { IsString, IsInt, IsOptional, Min, IsUrl } from 'class-validator';
 
 export class CreateLessonDto {
   @IsString()
@@ -6,6 +6,10 @@ export class CreateLessonDto {
 
   @IsString()
   content: string;
+
+  @IsOptional()
+  @IsUrl()
+  videoUrl?: string;
 
   @IsInt()
   @Min(1)

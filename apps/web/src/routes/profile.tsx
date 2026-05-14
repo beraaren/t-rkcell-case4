@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
 import { me as meApi, certificates as certsApi } from "@/lib/api";
-import { downloadCertPdf } from "@/lib/cert-pdf";
+import { downloadCertPdf, qrImageUrl } from "@/lib/cert-pdf";
 
 export const Route = createFileRoute("/profile")({ component: ProfilePage });
 
@@ -123,10 +123,21 @@ function ProfilePage() {
             <div className="grid sm:grid-cols-2 gap-3">
               {certs.map((c: any) => (
                 <div key={c.id} className="border rounded-lg p-4 bg-gradient-to-br from-accent/20 to-transparent space-y-2">
-                  <Award className="w-8 h-8 text-accent-foreground" />
-                  <div className="font-semibold">{c.courseTitle ?? c.course?.title}</div>
-                  <div className="text-xs text-muted-foreground font-mono">{c.number}</div>
-                  <div className="text-xs text-muted-foreground">{new Date(c.issuedAt).toLocaleDateString("tr-TR")}</div>
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1 space-y-1">
+                      <Award className="w-8 h-8 text-accent-foreground" />
+                      <div className="font-semibold">{c.courseTitle ?? c.course?.title}</div>
+                      <div className="text-xs text-muted-foreground font-mono">{c.number}</div>
+                      <div className="text-xs text-muted-foreground">{new Date(c.issuedAt).toLocaleDateString("tr-TR")}</div>
+                    </div>
+                    <img
+                      src={qrImageUrl(`${typeof window !== "undefined" ? window.location.origin : ""}/verify/${c.number}`, 120)}
+                      alt="QR"
+                      width={72}
+                      height={72}
+                      className="rounded border bg-white p-1 shrink-0"
+                    />
+                  </div>
                   <div className="flex gap-2">
                     <Button asChild size="sm" variant="outline" className="flex-1">
                       <Link to="/verify/$number" params={{ number: c.number }} target="_blank">

@@ -15,10 +15,11 @@ export class CoursesService {
   constructor(private prisma: PrismaService) {}
 
   async findAll(query: QueryCoursesDto) {
-    const { category, level, q, page = 1, limit = 12 } = query;
+    const { category, level, q, instructorId, page = 1, limit = 12 } = query;
     const where: any = { status: CourseStatus.PUBLISHED };
     if (category) where.category = category;
     if (level) where.level = level;
+    if (instructorId) where.instructorId = instructorId;
     if (q) where.OR = [
       { title: { contains: q, mode: 'insensitive' } },
       { description: { contains: q, mode: 'insensitive' } },
@@ -45,7 +46,7 @@ export class CoursesService {
     const course = await this.prisma.course.findUnique({
       where: { id },
       include: {
-        instructor: { select: { id: true, name: true, bio: true } },
+        instructor: { select: { id: true, name: true, bio: true, meta: true } },
         modules: {
           orderBy: { orderIndex: 'asc' },
           include: {
@@ -203,6 +204,78 @@ export class CoursesService {
         _count: { select: { enrollments: true, modules: true } },
       },
       orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getRecommendations(courseId: string, limit = 4) {
+    const course = await this.prisma.course.findUnique({ where: { id: courseId } });
+    if (!course) throw new NotFoundException('Kurs bulunamadı');
+
+    // Aynı kategori öncelikli, sonra aynı level
+    const sameCat = await this.prisma.course.findMany({
+      where: {
+        status: CourseStatus.PUBLISHED,
+        id: { not: courseId },
+        category: course.category,
+      },
+      include: {
+        instructor: { select: { id: true, name: true } },
+        _count: { select: { enrollments: true } },
+      },
+      orderBy: { enrollments: { _count: 'desc' } },
+      take: limit,
+    });
+
+    if (sameCat.length >= limit) return sameCat;
+
+    // Yetersizse aynı level
+    const fill = await this.prisma.course.findMany({
+      where: {
+        status: CourseStatus.PUBLISHED,
+        id: { notIn: [courseId, ...sameCat.map(c => c.id)] },
+        level: course.level,
+      },
+      include: {
+        instructor: { select: { id: true, name: true } },
+        _count: { select: { enrollments: true } },
+      },
+      orderBy: { enrollments: { _count: 'desc' } },
+      take: limit - sameCat.length,
+    });
+
+    return [...sameCat, ...fill];
+  }
+
+  async getRecommendedForUser(userId: string, limit = 6) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      include: { enrollments: { select: { courseId: true, course: { select: { category: true } } } } },
+    });
+    if (!user) return [];
+
+    const interests = ((user.meta as any)?.interests as string[]) ?? [];
+    const enrolledCats = user.enrollments.map(e => e.course.category);
+    const enrolledIds = user.enrollments.map(e => e.courseId);
+    const cats = Array.from(new Set([...interests, ...enrolledCats]));
+
+    if (cats.length === 0) {
+      return this.prisma.course.findMany({
+        where: { status: CourseStatus.PUBLISHED, id: { notIn: enrolledIds } },
+        include: { instructor: { select: { id: true, name: true } }, _count: { select: { enrollments: true } } },
+        orderBy: { enrollments: { _count: 'desc' } },
+        take: limit,
+      });
+    }
+
+    return this.prisma.course.findMany({
+      where: {
+        status: CourseStatus.PUBLISHED,
+        id: { notIn: enrolledIds },
+        category: { in: cats },
+      },
+      include: { instructor: { select: { id: true, name: true } }, _count: { select: { enrollments: true } } },
+      orderBy: { enrollments: { _count: 'desc' } },
+      take: limit,
     });
   }
 }

@@ -40,8 +40,17 @@ function MyCourses() {
               return (
                 <Card key={course.id} className="p-5 space-y-3">
                   <div className="flex items-start gap-3">
-                    <div className="w-14 h-14 rounded-md bg-accent/30 flex items-center justify-center text-3xl shrink-0">
-                      {course.coverEmoji ?? "📚"}
+                    <div className="w-14 h-14 rounded-md bg-gradient-to-br from-violet-500 via-violet-600 to-violet-800 flex items-center justify-center text-2xl font-bold text-white shrink-0 overflow-hidden">
+                      {course.coverUrl ? (
+                        <img
+                          src={course.coverUrl}
+                          alt={course.title}
+                          className="w-full h-full object-cover"
+                          onError={(e) => ((e.target as HTMLImageElement).style.display = "none")}
+                        />
+                      ) : (
+                        (course.title?.trim()[0] ?? "?").toUpperCase()
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold truncate">{course.title}</h3>

@@ -111,7 +111,12 @@ export class ExamsService {
           data: { status: AttemptStatus.EXPIRED },
         });
       } else {
-        const questions = this.prepareQuestions(exam.questions, exam.shuffle);
+        // Önceden atanmış soruları kullan
+        const assignedIds = (inProgress.assignedQuestionIds as string[] | null) ?? null;
+        const pool = assignedIds
+          ? exam.questions.filter(q => assignedIds.includes(q.id))
+          : exam.questions;
+        const questions = this.prepareQuestions(pool, exam.shuffle, null);
         return { attempt: inProgress, questions };
       }
     }
@@ -127,12 +132,15 @@ export class ExamsService {
     const now = new Date();
     const expiresAt = new Date(now.getTime() + exam.timeLimitMin * 60 * 1000);
 
+    // Soru havuzundan rastgele N seç (questionCount set ise)
+    const assignedQuestions = this.prepareQuestions(exam.questions, exam.shuffle, exam.questionCount);
+    const assignedIds = assignedQuestions.map(q => q.id);
+
     const attempt = await this.prisma.examAttempt.create({
-      data: { userId, examId, expiresAt },
+      data: { userId, examId, expiresAt, assignedQuestionIds: assignedIds },
     });
 
-    const questions = this.prepareQuestions(exam.questions, exam.shuffle);
-    return { attempt, questions };
+    return { attempt, questions: assignedQuestions };
   }
 
   // ── Student: Submit Attempt ─────────────────────────────────────────
@@ -164,8 +172,11 @@ export class ExamsService {
       });
     }
 
-    // Grade
-    const questions = attempt.exam.questions;
+    // Grade - sadece atanan soruları puanla
+    const assignedIds = (attempt.assignedQuestionIds as string[] | null) ?? null;
+    const questions = assignedIds
+      ? attempt.exam.questions.filter(q => assignedIds.includes(q.id))
+      : attempt.exam.questions;
     let totalScore = 0;
     for (const q of questions) {
       const userAns = dto.answers.find(a => a.questionId === q.id);
@@ -201,7 +212,12 @@ export class ExamsService {
     });
     if (!attempt) throw new NotFoundException('Tamamlanmış deneme bulunamadı');
 
-    const feedback = attempt.exam.questions.map(q => {
+    const resultAssignedIds = (attempt.assignedQuestionIds as string[] | null) ?? null;
+    const resultQuestions = resultAssignedIds
+      ? attempt.exam.questions.filter(q => resultAssignedIds.includes(q.id))
+      : attempt.exam.questions;
+
+    const feedback = resultQuestions.map(q => {
       const userAns = attempt.answers.find(a => a.questionId === q.id);
       const selected = (userAns?.selectedOptionIds as string[]) ?? [];
       const options = q.options as Array<{ id: string; text: string; isCorrect: boolean }>;
@@ -284,8 +300,8 @@ export class ExamsService {
     }
   }
 
-  private prepareQuestions(questions: any[], shuffle: boolean) {
-    const q = questions.map(question => {
+  private prepareQuestions(questions: any[], shuffle: boolean, questionCount?: number | null) {
+    let q = questions.map(question => {
       const opts = question.options as Array<{ id: string; text: string; isCorrect: boolean }>;
       return {
         id: question.id,
@@ -303,6 +319,12 @@ export class ExamsService {
         [q[i], q[j]] = [q[j], q[i]];
       }
     }
+
+    // Soru bankasından rastgele N seç
+    if (questionCount && questionCount > 0 && q.length > questionCount) {
+      q = q.slice(0, questionCount);
+    }
+
     return q;
   }
 

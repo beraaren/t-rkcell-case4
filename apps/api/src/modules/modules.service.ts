@@ -20,7 +20,7 @@ export class ModulesService {
       orderBy: { orderIndex: 'asc' },
       include: {
         lessons: { orderBy: { orderIndex: 'asc' } },
-        exam: { select: { id: true, timeLimitMin: true, passingScore: true } },
+        exam: { select: { id: true, timeLimitMin: true, passingScore: true, maxAttempts: true, questionCount: true, shuffle: true } },
       },
     });
   }
@@ -30,7 +30,7 @@ export class ModulesService {
       where: { id },
       include: {
         lessons: { orderBy: { orderIndex: 'asc' } },
-        exam: true,
+        exam: { include: { questions: { select: { id: true } } } },
       },
     });
     if (!mod) throw new NotFoundException('Modül bulunamadı');

@@ -1,13 +1,15 @@
-import { createFileRoute, Link, Navigate, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, Navigate, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { BookOpen, Users, Trophy, TrendingUp, Plus, ChevronRight, BarChart3 } from "lucide-react";
+import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
-import { admin as adminApi } from "@/lib/api";
+import { admin as adminApi, courses as coursesApi } from "@/lib/api";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from "recharts";
 
 export const Route = createFileRoute("/instructor")({ component: InstructorPanel });
@@ -30,21 +32,41 @@ function StatCard({ label, value, icon: Icon, sub }: { label: string; value: str
 function InstructorPanel() {
   const { user, loading } = useAuth();
   const nav = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isChildRoute = pathname !== "/instructor";
+
   const [courses, setCourses] = useState<any[]>([]);
   const [fetching, setFetching] = useState(true);
+  const [updatingStatusId, setUpdatingStatusId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (isChildRoute) { setFetching(false); return; }
     if (!loading && user?.role === "INSTRUCTOR") {
       adminApi.instructorStats()
         .then(setCourses)
         .catch(() => {})
         .finally(() => setFetching(false));
     }
-  }, [loading, user]);
+  }, [loading, user, isChildRoute]);
 
-  if (loading || fetching) return null;
+  const changeStatus = async (courseId: string, status: string) => {
+    setUpdatingStatusId(courseId);
+    try {
+      await coursesApi.update(courseId, { status });
+      setCourses((prev) => prev.map((c) => (c.id === courseId ? { ...c, status } : c)));
+      toast.success(status === "PUBLISHED" ? "Kurs yayında" : status === "DRAFT" ? "Kurs taslağa alındı" : "Kurs arşivlendi");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
+  if (loading) return null;
   if (!user) return <Navigate to="/login" />;
-  if (user.role !== "INSTRUCTOR") return <Navigate to="/courses" />;
+  if (user.role !== "INSTRUCTOR" && user.role !== "ADMIN") return <Navigate to="/courses" />;
+  if (isChildRoute) return <Outlet />;
+  if (fetching) return null;
 
   const totalEnrollments = courses.reduce((s, c) => s + c.enrollments, 0);
   const totalLessons = courses.reduce((s, c) => s + c.totalLessons, 0);
@@ -67,7 +89,7 @@ function InstructorPanel() {
             <h1 className="text-3xl font-bold">Eğitmen Paneli</h1>
             <p className="text-muted-foreground mt-1">Hoşgeldin, {user.name}</p>
           </div>
-          <Button className="bg-violet-600 hover:bg-violet-700" onClick={() => nav({ to: "/courses" })}>
+          <Button className="bg-violet-600 hover:bg-violet-700" onClick={() => nav({ to: "/instructor/new" })}>
             <Plus className="w-4 h-4 mr-2" /> Yeni Kurs
           </Button>
         </div>
@@ -120,7 +142,7 @@ function InstructorPanel() {
             <Card className="p-12 text-center space-y-3">
               <BookOpen className="w-10 h-10 mx-auto text-muted-foreground" />
               <p className="text-muted-foreground">Henüz kurs oluşturmadın.</p>
-              <Button variant="outline" onClick={() => nav({ to: "/courses" })}>İlk Kursunu Oluştur</Button>
+              <Button variant="outline" onClick={() => nav({ to: "/instructor/new" })}>İlk Kursunu Oluştur</Button>
             </Card>
           ) : (
             <div className="space-y-3">
@@ -128,11 +150,34 @@ function InstructorPanel() {
                 <Card key={c.id} className="p-5">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 space-y-3">
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3 flex-wrap">
                         <h3 className="font-semibold text-lg">{c.title}</h3>
-                        <Badge variant={c.status === "PUBLISHED" ? "default" : c.status === "ARCHIVED" ? "destructive" : "secondary"}>
-                          {c.status === "PUBLISHED" ? "Yayında" : c.status === "DRAFT" ? "Taslak" : "Arşiv"}
+                        <Badge
+                          className={
+                            c.status === "PUBLISHED"
+                              ? "bg-green-500/15 text-green-600 dark:text-green-400 border-green-500/30"
+                              : c.status === "ARCHIVED"
+                              ? "bg-zinc-500/15 text-zinc-500 border-zinc-500/30"
+                              : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                          }
+                          variant="outline"
+                        >
+                          {c.status === "PUBLISHED" ? "Canlı" : c.status === "DRAFT" ? "Taslak" : "Arşiv"}
                         </Badge>
+                        <Select
+                          value={c.status}
+                          onValueChange={(v) => changeStatus(c.id, v)}
+                          disabled={updatingStatusId === c.id}
+                        >
+                          <SelectTrigger className="h-7 text-xs w-32">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="DRAFT">Taslak</SelectItem>
+                            <SelectItem value="PUBLISHED">Canlı (Yayında)</SelectItem>
+                            <SelectItem value="ARCHIVED">Arşiv</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </div>
 
                       <div className="grid sm:grid-cols-3 gap-4 text-sm">

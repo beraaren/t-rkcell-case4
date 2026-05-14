@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { certificates as certsApi } from "@/lib/api";
-import { downloadCertPdf } from "@/lib/cert-pdf";
+import { downloadCertPdf, qrImageUrl } from "@/lib/cert-pdf";
 
 export const Route = createFileRoute("/verify/$number")({ component: VerifyPage });
 
@@ -108,6 +108,18 @@ function VerifyPage() {
                   Veriliş Tarihi: {new Date(result.issuedAt).toLocaleDateString("tr-TR")}
                 </div>
                 <div className="text-sm font-mono font-bold pt-2 tracking-wider">{result.number}</div>
+
+                <div className="flex flex-col items-center pt-3 gap-1.5">
+                  <img
+                    src={qrImageUrl(typeof window !== "undefined" ? window.location.href : "", 180)}
+                    alt="Doğrulama karekodu"
+                    width={140}
+                    height={140}
+                    className="rounded-md border bg-white p-2"
+                  />
+                  <div className="text-[11px] text-muted-foreground">Karekodu tarat — bu doğrulama sayfasına ulaş</div>
+                </div>
+
                 <div className="text-xs text-muted-foreground pt-1">
                   Doğrulama: {typeof window !== "undefined" ? window.location.href : ""}
                 </div>

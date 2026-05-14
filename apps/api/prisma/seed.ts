@@ -17,13 +17,14 @@ async function main() {
   await prisma.lesson.deleteMany();
   await prisma.module.deleteMany();
   await prisma.course.deleteMany();
-  await prisma.user.deleteMany();
 
   const hash = async (p: string) => bcrypt.hash(p, 10);
 
-  // Users
-  const instructor = await prisma.user.create({
-    data: {
+  // Users — upsert (varsa dokunma)
+  const instructor = await prisma.user.upsert({
+    where: { gsm: '05551112233' },
+    update: {},
+    create: {
       gsm: '05551112233',
       passwordHash: await hash('Test1234'),
       name: 'Ahmet Yılmaz',
@@ -33,8 +34,10 @@ async function main() {
     },
   });
 
-  const student = await prisma.user.create({
-    data: {
+  await prisma.user.upsert({
+    where: { gsm: '05554445566' },
+    update: {},
+    create: {
       gsm: '05554445566',
       passwordHash: await hash('Test1234'),
       name: 'Fatma Kaya',
@@ -43,12 +46,25 @@ async function main() {
     },
   });
 
-  await prisma.user.create({
-    data: {
+  await prisma.user.upsert({
+    where: { gsm: '05557778899' },
+    update: {},
+    create: {
       gsm: '05557778899',
       passwordHash: await hash('Test1234'),
       name: 'Admin Kullanıcı',
       role: Role.ADMIN,
+    },
+  });
+
+  await prisma.user.upsert({
+    where: { gsm: '05550000000' },
+    update: {},
+    create: {
+      gsm: '05550000000',
+      passwordHash: await hash('Bera1234'),
+      name: 'Bera',
+      role: Role.STUDENT,
     },
   });
 
@@ -340,17 +356,13 @@ async function main() {
       const questions = questionBank(exam.id, mi, ci);
       await prisma.question.createMany({ data: questions });
     }
-
-    // Enroll student
-    await prisma.enrollment.create({
-      data: { userId: student.id, courseId: course.id },
-    });
   }
 
   console.log('✅ Seed tamamlandı');
   console.log('Instructor: 05551112233 / Test1234');
   console.log('Student:    05554445566 / Test1234');
   console.log('Admin:      05557778899 / Test1234');
+  console.log('Bera:       05550000000 / Bera1234');
 }
 
 main()

@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { ArrowLeft, Plus, Pencil, Trash2, Video, FileQuestion, Save, Settings2 } from "lucide-react";
+import { ArrowLeft, Plus, Pencil, Trash2, Video, FileQuestion, Save, Settings2, Check, CircleDot } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { Card } from "@/components/ui/card";
@@ -40,6 +40,17 @@ function CourseEditor() {
   // Exam editor state
   const [examOpen, setExamOpen] = useState<{ moduleId: string; examId?: string } | null>(null);
   const [examForm, setExamForm] = useState<ExamForm>({ timeLimitMin: 15, passingScore: 60, maxAttempts: 3, questionCount: null, shuffle: true });
+  const [examQuestions, setExamQuestions] = useState<any[]>([]);
+  const [qForm, setQForm] = useState<{ type: string; text: string; options: { id: string; text: string; isCorrect: boolean }[] }>({
+    type: "MULTIPLE_CHOICE",
+    text: "",
+    options: [
+      { id: "a", text: "", isCorrect: false },
+      { id: "b", text: "", isCorrect: false },
+      { id: "c", text: "", isCorrect: false },
+      { id: "d", text: "", isCorrect: false },
+    ],
+  });
 
   const loadAll = async () => {
     try {
@@ -75,10 +86,13 @@ function CourseEditor() {
   if (!user) return <Navigate to="/login" />;
   if (user.role !== "INSTRUCTOR" && user.role !== "ADMIN") return <Navigate to="/courses" />;
   if (!course) return <div className="min-h-screen"><AppHeader /><div className="p-8 text-center">Yükleniyor…</div></div>;
+  if (user.role !== "ADMIN" && course.instructorId !== user.id) return <Navigate to="/instructor" />;
 
   const saveCourse = async () => {
     try {
-      await coursesApi.update(courseId, courseForm);
+      const body: any = { ...courseForm };
+      if (!body.coverUrl?.trim()) delete body.coverUrl;
+      await coursesApi.update(courseId, body);
       toast.success("Kurs güncellendi");
       loadAll();
     } catch (err: any) { toast.error(err.message); }
@@ -134,8 +148,41 @@ function CourseEditor() {
     } catch (err: any) { toast.error(err.message); }
   };
 
-  const openExam = (moduleId: string, existing?: any) => {
+  const resetQuestionForm = (type: string = "MULTIPLE_CHOICE") => {
+    if (type === "TRUE_FALSE") {
+      setQForm({
+        type,
+        text: "",
+        options: [
+          { id: "true", text: "Doğru", isCorrect: false },
+          { id: "false", text: "Yanlış", isCorrect: false },
+        ],
+      });
+    } else {
+      setQForm({
+        type,
+        text: "",
+        options: [
+          { id: "a", text: "", isCorrect: false },
+          { id: "b", text: "", isCorrect: false },
+          { id: "c", text: "", isCorrect: false },
+          { id: "d", text: "", isCorrect: false },
+        ],
+      });
+    }
+  };
+
+  const loadExamQuestions = async (examId: string) => {
+    try {
+      const exam = await examsApi.manage(examId);
+      setExamQuestions(exam?.questions ?? []);
+    } catch { setExamQuestions([]); }
+  };
+
+  const openExam = async (moduleId: string, existing?: any) => {
     setExamOpen({ moduleId, examId: existing?.id });
+    setExamQuestions([]);
+    resetQuestionForm("MULTIPLE_CHOICE");
     if (existing) {
       setExamForm({
         timeLimitMin: existing.timeLimitMin ?? 15,
@@ -144,13 +191,14 @@ function CourseEditor() {
         questionCount: existing.questionCount ?? null,
         shuffle: existing.shuffle ?? true,
       });
+      if (existing.id) await loadExamQuestions(existing.id);
     } else {
       setExamForm({ timeLimitMin: 15, passingScore: 60, maxAttempts: 3, questionCount: null, shuffle: true });
     }
   };
 
-  const saveExam = async () => {
-    if (!examOpen) return;
+  const saveExam = async (closeAfter = false) => {
+    if (!examOpen) return null;
     const body: any = {
       timeLimitMin: examForm.timeLimitMin,
       passingScore: examForm.passingScore,
@@ -159,11 +207,82 @@ function CourseEditor() {
     };
     if (examForm.questionCount && examForm.questionCount > 0) body.questionCount = examForm.questionCount;
     try {
-      await examsApi.create(examOpen.moduleId, body);
+      const saved = await examsApi.create(examOpen.moduleId, body);
       toast.success("Sınav yapılandırması kaydedildi");
-      setExamOpen(null);
-      loadAll();
+      setExamOpen({ moduleId: examOpen.moduleId, examId: saved.id });
+      await loadExamQuestions(saved.id);
+      if (closeAfter) {
+        setExamOpen(null);
+        loadAll();
+      }
+      return saved.id as string;
+    } catch (err: any) { toast.error(err.message); return null; }
+  };
+
+  const setQType = (type: string) => resetQuestionForm(type);
+
+  const toggleQOption = (idx: number) => {
+    setQForm((prev) => {
+      const opts = prev.options.map((o, i) => {
+        if (prev.type === "MULTI_SELECT") {
+          return i === idx ? { ...o, isCorrect: !o.isCorrect } : o;
+        }
+        return { ...o, isCorrect: i === idx };
+      });
+      return { ...prev, options: opts };
+    });
+  };
+
+  const setQOptionText = (idx: number, value: string) => {
+    setQForm((prev) => ({
+      ...prev,
+      options: prev.options.map((o, i) => (i === idx ? { ...o, text: value } : o)),
+    }));
+  };
+
+  const addQuestion = async () => {
+    if (!examOpen) return;
+    let examId = examOpen.examId;
+    if (!examId) {
+      examId = (await saveExam(false)) ?? undefined;
+      if (!examId) return;
+    }
+    if (!qForm.text.trim()) { toast.error("Soru metni boş olamaz"); return; }
+    const correctCount = qForm.options.filter((o) => o.isCorrect).length;
+    if (correctCount === 0) { toast.error("En az bir doğru cevap işaretle"); return; }
+    if (qForm.type === "MULTIPLE_CHOICE" && correctCount !== 1) { toast.error("Tek seçimde sadece bir doğru cevap olabilir"); return; }
+    if (qForm.type === "TRUE_FALSE" && correctCount !== 1) { toast.error("Doğru/Yanlış'tan birini seç"); return; }
+    if (qForm.type !== "TRUE_FALSE" && qForm.options.some((o) => !o.text.trim())) {
+      toast.error("Tüm seçeneklere metin gir");
+      return;
+    }
+    try {
+      await examsApi.addQuestion(examId, {
+        type: qForm.type,
+        text: qForm.text.trim(),
+        options: qForm.options,
+        orderIndex: examQuestions.length + 1,
+      });
+      toast.success("Soru eklendi");
+      resetQuestionForm(qForm.type);
+      await loadExamQuestions(examId);
     } catch (err: any) { toast.error(err.message); }
+  };
+
+  const deleteQuestion = async (questionId: string) => {
+    if (!examOpen?.examId) return;
+    if (!confirm("Bu soruyu silmek istediğine emin misin?")) return;
+    try {
+      await examsApi.deleteQuestion(questionId);
+      toast.success("Soru silindi");
+      await loadExamQuestions(examOpen.examId);
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const closeExamDialog = () => {
+    setExamOpen(null);
+    setExamQuestions([]);
+    loadAll();
   };
 
   return (
@@ -316,35 +435,131 @@ function CourseEditor() {
       </Dialog>
 
       {/* Exam Dialog */}
-      <Dialog open={!!examOpen} onOpenChange={(o) => !o && setExamOpen(null)}>
-        <DialogContent>
+      <Dialog open={!!examOpen} onOpenChange={(o) => !o && closeExamDialog()}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Sınav Yapılandırması</DialogTitle>
+            <DialogTitle>Sınav Yönetimi</DialogTitle>
           </DialogHeader>
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div><Label>Süre (dk)</Label><Input type="number" min={1} value={examForm.timeLimitMin} onChange={(e) => setExamForm({ ...examForm, timeLimitMin: Number(e.target.value) })} /></div>
-              <div><Label>Geçme Puanı</Label><Input type="number" min={0} max={100} value={examForm.passingScore} onChange={(e) => setExamForm({ ...examForm, passingScore: Number(e.target.value) })} /></div>
-              <div><Label>Maks. Deneme</Label><Input type="number" min={1} value={examForm.maxAttempts} onChange={(e) => setExamForm({ ...examForm, maxAttempts: Number(e.target.value) })} /></div>
-              <div>
-                <Label>Soru Sayısı (random)</Label>
-                <Input type="number" min={1} value={examForm.questionCount ?? ""} onChange={(e) => setExamForm({ ...examForm, questionCount: e.target.value ? Number(e.target.value) : null })} placeholder="Tümü" />
+
+          <div className="space-y-5">
+            {/* Settings */}
+            <div className="space-y-3">
+              <h4 className="text-sm font-semibold">Sınav Ayarları</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div><Label>Süre (dk)</Label><Input type="number" min={1} value={examForm.timeLimitMin} onChange={(e) => setExamForm({ ...examForm, timeLimitMin: Number(e.target.value) })} /></div>
+                <div><Label>Geçme Puanı</Label><Input type="number" min={0} max={100} value={examForm.passingScore} onChange={(e) => setExamForm({ ...examForm, passingScore: Number(e.target.value) })} /></div>
+                <div><Label>Maks. Deneme</Label><Input type="number" min={1} value={examForm.maxAttempts} onChange={(e) => setExamForm({ ...examForm, maxAttempts: Number(e.target.value) })} /></div>
+                <div>
+                  <Label>Soru Sayısı (random)</Label>
+                  <Input type="number" min={1} value={examForm.questionCount ?? ""} onChange={(e) => setExamForm({ ...examForm, questionCount: e.target.value ? Number(e.target.value) : null })} placeholder="Tümü" />
+                </div>
               </div>
-            </div>
-            <div className="flex items-center justify-between border rounded-lg p-3">
-              <div>
-                <div className="text-sm font-medium">Soruları Karıştır</div>
-                <div className="text-xs text-muted-foreground">Her denemede farklı sıra</div>
+              <div className="flex items-center justify-between border rounded-lg p-3">
+                <div>
+                  <div className="text-sm font-medium">Soruları Karıştır</div>
+                  <div className="text-xs text-muted-foreground">Her denemede farklı sıra</div>
+                </div>
+                <Switch checked={examForm.shuffle} onCheckedChange={(v) => setExamForm({ ...examForm, shuffle: v })} />
               </div>
-              <Switch checked={examForm.shuffle} onCheckedChange={(v) => setExamForm({ ...examForm, shuffle: v })} />
+              <Button size="sm" className="bg-violet-600 hover:bg-violet-700" onClick={() => saveExam(false)}>
+                <Save className="w-3.5 h-3.5 mr-1.5" /> {examOpen?.examId ? "Ayarları Güncelle" : "Sınavı Oluştur"}
+              </Button>
+              {!examOpen?.examId && (
+                <p className="text-xs text-muted-foreground">Soru ekleyebilmek için önce sınavı oluştur.</p>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground">
-              Soru sayısını set edersen, soru bankasından rastgele o kadar soru seçilir. Boşsa tüm sorular kullanılır.
-            </p>
+
+            {/* Existing questions */}
+            {examOpen?.examId && (
+              <div className="space-y-2 border-t pt-4">
+                <h4 className="text-sm font-semibold">Sorular ({examQuestions.length})</h4>
+                {examQuestions.length === 0 ? (
+                  <p className="text-xs text-muted-foreground">Henüz soru yok.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {examQuestions.map((q: any, qi: number) => (
+                      <div key={q.id} className="border rounded-lg p-3 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1">
+                            <div className="text-xs text-muted-foreground">Soru {qi + 1} · {q.type}</div>
+                            <div className="text-sm font-medium">{q.text}</div>
+                          </div>
+                          <Button size="icon" variant="ghost" className="h-7 w-7 text-red-500" onClick={() => deleteQuestion(q.id)}>
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </Button>
+                        </div>
+                        <div className="space-y-1">
+                          {(q.options as any[])?.map((o: any) => (
+                            <div key={o.id} className="flex items-center gap-2 text-xs">
+                              {o.isCorrect
+                                ? <Check className="w-3.5 h-3.5 text-green-500" />
+                                : <CircleDot className="w-3.5 h-3.5 text-muted-foreground/50" />}
+                              <span className={o.isCorrect ? "text-green-600 dark:text-green-400 font-medium" : ""}>{o.text}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* New question form */}
+            {examOpen?.examId && (
+              <div className="space-y-3 border-t pt-4">
+                <h4 className="text-sm font-semibold flex items-center gap-2">
+                  <Plus className="w-4 h-4 text-violet-600" /> Yeni Soru
+                </h4>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-1">
+                    <Label>Tip</Label>
+                    <Select value={qForm.type} onValueChange={setQType}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="MULTIPLE_CHOICE">Tek seçim</SelectItem>
+                        <SelectItem value="MULTI_SELECT">Çoklu seçim</SelectItem>
+                        <SelectItem value="TRUE_FALSE">Doğru / Yanlış</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label>Soru Metni</Label>
+                    <Textarea rows={2} value={qForm.text} onChange={(e) => setQForm({ ...qForm, text: e.target.value })} />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Seçenekler {qForm.type === "MULTI_SELECT" && <span className="text-xs text-muted-foreground">(birden fazla işaretle)</span>}</Label>
+                  {qForm.options.map((o, i) => (
+                    <div key={o.id} className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => toggleQOption(i)}
+                        className={`w-6 h-6 rounded ${qForm.type === "MULTI_SELECT" ? "rounded-md" : "rounded-full"} border-2 flex items-center justify-center shrink-0 ${
+                          o.isCorrect ? "bg-green-500 border-green-500 text-white" : "border-muted-foreground/40"
+                        }`}
+                      >
+                        {o.isCorrect && <Check className="w-3.5 h-3.5" />}
+                      </button>
+                      {qForm.type === "TRUE_FALSE" ? (
+                        <span className="text-sm flex-1">{o.text}</span>
+                      ) : (
+                        <Input value={o.text} onChange={(e) => setQOptionText(i, e.target.value)} placeholder={`Seçenek ${o.id.toUpperCase()}`} />
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <Button onClick={addQuestion} className="bg-violet-600 hover:bg-violet-700">
+                  <Plus className="w-4 h-4 mr-1" /> Soruyu Ekle
+                </Button>
+              </div>
+            )}
           </div>
+
           <DialogFooter>
-            <Button variant="outline" onClick={() => setExamOpen(null)}>İptal</Button>
-            <Button className="bg-violet-600 hover:bg-violet-700" onClick={saveExam}>Kaydet</Button>
+            <Button variant="outline" onClick={closeExamDialog}>Kapat</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

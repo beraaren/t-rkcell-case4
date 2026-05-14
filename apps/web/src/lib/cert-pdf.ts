@@ -1,4 +1,19 @@
-// A4 landscape sertifika — Canvas API, sıfır bağımlılık
+// A4 landscape sertifika — Canvas API, sıfır bağımlılık (QR external API)
+
+export function qrImageUrl(data: string, size = 240) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=${size}x${size}&margin=0&data=${encodeURIComponent(data)}`;
+}
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
 export async function downloadCertPdf(cert: {
   userName: string;
   courseTitle: string;
@@ -96,14 +111,34 @@ export async function downloadCertPdf(cert: {
   ctx.textAlign = "right";
   ctx.fillText(`Sertifika No: ${cert.number}`, W - 100, 540);
 
+  // QR code (right side)
+  try {
+    const qr = await loadImage(qrImageUrl(cert.verifyUrl, 240));
+    const qrSize = 120;
+    const qrX = W - 100 - qrSize;
+    const qrY = 580;
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(qrX - 6, qrY - 6, qrSize + 12, qrSize + 12);
+    ctx.strokeStyle = "#e5e7eb";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(qrX - 6, qrY - 6, qrSize + 12, qrSize + 12);
+    ctx.drawImage(qr, qrX, qrY, qrSize, qrSize);
+    ctx.fillStyle = "#9ca3af";
+    ctx.font = "10px monospace";
+    ctx.textAlign = "center";
+    ctx.fillText("Karekod ile doğrula", qrX + qrSize / 2, qrY + qrSize + 16);
+  } catch {
+    // QR yüklenemezse sessiz geç
+  }
+
   // Verify URL
   ctx.fillStyle = "#9ca3af";
   ctx.font = "12px monospace";
   ctx.textAlign = "center";
   ctx.fillText(`Doğrulama: ${cert.verifyUrl}`, W / 2, 575);
 
-  // Seal circle
-  const sx = W / 2, sy = 660, sr = 55;
+  // Seal circle (left side)
+  const sx = 180, sy = 660, sr = 55;
   ctx.beginPath();
   ctx.arc(sx, sy, sr, 0, Math.PI * 2);
   ctx.fillStyle = "#7c3aed";

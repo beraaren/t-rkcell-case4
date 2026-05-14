@@ -40,4 +40,14 @@ export class AdminController {
   archiveCourse(@Param('id') id: string) {
     return this.adminService.archiveCourse(id);
   }
+
+  @Patch('courses/:id/unarchive')
+  unarchiveCourse(@Param('id') id: string) {
+    return this.adminService.unarchiveCourse(id);
+  }
+
+  @Patch('courses/:id')
+  updateCourse(@Param('id') id: string, @Body() body: any) {
+    return this.adminService.updateCourse(id, body);
+  }
 }

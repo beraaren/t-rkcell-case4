@@ -84,7 +84,7 @@ export const auth = {
 
 // ── COURSES ───────────────────────────────────────────────────────────
 export const courses = {
-  list: async (params?: { q?: string; category?: string; level?: string }) => {
+  list: async (params?: { q?: string; category?: string; level?: string; instructorId?: string }) => {
     const qs = new URLSearchParams(params as any).toString();
     const res = await request<any>(`/courses${qs ? `?${qs}` : ""}`);
     return Array.isArray(res) ? res : (res?.courses ?? []);

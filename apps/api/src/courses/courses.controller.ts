@@ -50,4 +50,10 @@ export class CoursesController {
   enroll(@Param('id') courseId: string, @CurrentUser() user: any) {
     return this.coursesService.enroll(courseId, user.id);
   }
+
+  @Public()
+  @Get(':id/recommendations')
+  recommendations(@Param('id') id: string, @Query('limit') limit?: string) {
+    return this.coursesService.getRecommendations(id, limit ? Number(limit) : 4);
+  }
 }

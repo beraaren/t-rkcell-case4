@@ -1,4 +1,4 @@
-import { createFileRoute, Navigate } from "@tanstack/react-router";
+import { createFileRoute, Navigate, Outlet, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
@@ -12,26 +12,45 @@ export const Route = createFileRoute("/courses")({ component: CoursesPage });
 
 function CoursesPage() {
   const { user, loading } = useAuth();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const isChildRoute = pathname !== "/courses";
+
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("all");
   const [level, setLevel] = useState("all");
+  const [instructorId, setInstructorId] = useState("all");
   const [courseList, setCourseList] = useState<any[]>([]);
   const [cats, setCats] = useState<string[]>([]);
+  const [instructors, setInstructors] = useState<{ id: string; name: string }[]>([]);
 
   useEffect(() => {
+    if (isChildRoute) return;
     const params: any = {};
     if (q) params.q = q;
     if (category !== "all") params.category = category;
     if (level !== "all") params.level = level;
+    if (instructorId !== "all") params.instructorId = instructorId;
     coursesApi.list(params).then((data) => {
       setCourseList(data);
-      const unique = [...new Set(data.map((c: any) => c.category).filter(Boolean))] as string[];
-      setCats(unique);
     }).catch(() => {});
-  }, [q, category, level]);
+  }, [q, category, level, instructorId, isChildRoute]);
+
+  useEffect(() => {
+    if (isChildRoute) return;
+    coursesApi.list().then((data) => {
+      const uniqueCats = [...new Set(data.map((c: any) => c.category).filter(Boolean))] as string[];
+      setCats(uniqueCats);
+      const insMap = new Map<string, string>();
+      data.forEach((c: any) => {
+        if (c.instructor?.id && c.instructor?.name) insMap.set(c.instructor.id, c.instructor.name);
+      });
+      setInstructors(Array.from(insMap, ([id, name]) => ({ id, name })));
+    }).catch(() => {});
+  }, [isChildRoute]);
 
   if (loading) return null;
   if (!user) return <Navigate to="/login" />;
+  if (isChildRoute) return <Outlet />;
 
   return (
     <div className="min-h-screen bg-background">
@@ -42,8 +61,8 @@ function CoursesPage() {
           <p className="text-muted-foreground mt-1">Yeni bir şey öğrenmeye başla.</p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3 mb-6">
-          <div className="relative flex-1">
+        <div className="flex flex-wrap gap-3 mb-6">
+          <div className="relative flex-1 min-w-[200px]">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Kurs ara..." className="pl-9" />
           </div>
@@ -61,6 +80,13 @@ function CoursesPage() {
               <SelectItem value="BEGINNER">Başlangıç</SelectItem>
               <SelectItem value="INTERMEDIATE">Orta</SelectItem>
               <SelectItem value="ADVANCED">İleri</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={instructorId} onValueChange={setInstructorId}>
+            <SelectTrigger className="w-48"><SelectValue placeholder="Eğitmen" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Tüm Eğitmenler</SelectItem>
+              {instructors.map((i) => <SelectItem key={i.id} value={i.id}>{i.name}</SelectItem>)}
             </SelectContent>
           </Select>
         </div>

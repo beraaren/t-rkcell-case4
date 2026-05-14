@@ -50,6 +50,24 @@ export class AdminService {
     });
   }
 
+  async unarchiveCourse(courseId: string) {
+    const course = await this.prisma.course.findUnique({ where: { id: courseId } });
+    if (!course) throw new NotFoundException('Kurs bulunamadı');
+    return this.prisma.course.update({
+      where: { id: courseId },
+      data: { status: CourseStatus.PUBLISHED },
+    });
+  }
+
+  async updateCourse(courseId: string, data: {
+    title?: string; description?: string; category?: string;
+    level?: any; coverUrl?: string; estimatedDuration?: number; status?: CourseStatus;
+  }) {
+    const course = await this.prisma.course.findUnique({ where: { id: courseId } });
+    if (!course) throw new NotFoundException('Kurs bulunamadı');
+    return this.prisma.course.update({ where: { id: courseId }, data });
+  }
+
   async getStats() {
     const [users, courses, enrollments, certificates, students, instructors, attempts] = await Promise.all([
       this.prisma.user.count(),
