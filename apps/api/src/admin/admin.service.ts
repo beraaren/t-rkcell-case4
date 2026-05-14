@@ -51,12 +51,68 @@ export class AdminService {
   }
 
   async getStats() {
-    const [users, courses, enrollments, certificates] = await Promise.all([
+    const [users, courses, enrollments, certificates, students, instructors, attempts] = await Promise.all([
       this.prisma.user.count(),
-      this.prisma.course.count(),
+      this.prisma.course.count({ where: { status: { not: 'ARCHIVED' } } }),
       this.prisma.enrollment.count(),
       this.prisma.certificate.count(),
+      this.prisma.user.count({ where: { role: Role.STUDENT } }),
+      this.prisma.user.count({ where: { role: Role.INSTRUCTOR } }),
+      this.prisma.examAttempt.count({ where: { status: 'SUBMITTED' } }),
     ]);
-    return { users, courses, enrollments, certificates };
+
+    const passedAttempts = await this.prisma.examAttempt.count({
+      where: {
+        status: 'SUBMITTED',
+        exam: { is: {} },
+        score: { gte: 60 },
+      },
+    });
+
+    const passRate = attempts > 0 ? Math.round((passedAttempts / attempts) * 100) : 0;
+
+    return { users, courses, enrollments, certificates, students, instructors, attempts, passRate };
+  }
+
+  async getInstructorStats(instructorId: string) {
+    const instructorCourses = await this.prisma.course.findMany({
+      where: { instructorId },
+      include: {
+        _count: { select: { enrollments: true } },
+        modules: {
+          include: {
+            lessons: {
+              include: { progress: { select: { id: true } } },
+            },
+            exam: {
+              include: {
+                attempts: { where: { status: 'SUBMITTED' }, select: { score: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    return instructorCourses.map(c => {
+      const totalLessonProgress = c.modules.flatMap(m => m.lessons.flatMap(l => l.progress)).length;
+      const totalLessons = c.modules.flatMap(m => m.lessons).length;
+      const allAttempts = c.modules.flatMap(m => m.exam?.attempts ?? []);
+      const passedAttempts = allAttempts.filter(a => (a.score ?? 0) >= 60).length;
+      const examPassRate = allAttempts.length > 0 ? Math.round((passedAttempts / allAttempts.length) * 100) : null;
+      const completionRate = totalLessons > 0 && c._count.enrollments > 0
+        ? Math.round((totalLessonProgress / (totalLessons * c._count.enrollments)) * 100)
+        : 0;
+
+      return {
+        id: c.id,
+        title: c.title,
+        status: c.status,
+        enrollments: c._count.enrollments,
+        completionRate,
+        examPassRate,
+        totalLessons,
+      };
+    });
   }
 }

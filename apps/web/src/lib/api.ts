@@ -196,4 +196,5 @@ export const admin = {
   },
   archiveCourse: (id: string) =>
     request<any>(`/admin/courses/${id}/archive`, { method: "PATCH" }),
+  instructorStats: () => request<any[]>("/admin/instructor-stats"),
 };

@@ -2,6 +2,7 @@ import { Controller, Get, Patch, Body, Param, Query } from '@nestjs/common';
 import { AdminService } from './admin.service';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { Roles } from '../common/decorators/roles.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { Role } from '@prisma/client';
 
 @Roles(Role.ADMIN)
@@ -12,6 +13,12 @@ export class AdminController {
   @Get('stats')
   getStats() {
     return this.adminService.getStats();
+  }
+
+  @Roles(Role.ADMIN, Role.INSTRUCTOR)
+  @Get('instructor-stats')
+  getInstructorStats(@CurrentUser() user: any) {
+    return this.adminService.getInstructorStats(user.id);
   }
 
   @Get('users')
