@@ -1,16 +1,21 @@
 import { createFileRoute, Navigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Users, BookOpen, GraduationCap, Award, TrendingUp, ShieldCheck, CheckCircle2 } from "lucide-react";
+import { Users, BookOpen, GraduationCap, Award, TrendingUp, ShieldCheck, CheckCircle2, ArchiveRestore, Pencil } from "lucide-react";
 import { AppHeader } from "@/components/AppHeader";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useAuth } from "@/lib/auth";
 import { admin as adminApi } from "@/lib/api";
 import { toast } from "sonner";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 
 export const Route = createFileRoute("/admin")({ component: AdminPanel });
 
@@ -38,12 +43,16 @@ function StatCard({ label, value, sub, icon: Icon, color = "violet" }: {
   );
 }
 
+const PIE_COLORS = ["#8b5cf6", "#3b82f6", "#10b981", "#f59e0b", "#ef4444"];
+
 function AdminPanel() {
   const { user, loading } = useAuth();
   const [stats, setStats] = useState<any>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [courses, setCourses] = useState<any[]>([]);
   const [tab, setTab] = useState<"users" | "courses">("users");
+  const [editing, setEditing] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({ title: "", description: "", category: "", level: "BEGINNER", status: "DRAFT" });
 
   const loadData = () => {
     adminApi.stats().then(setStats).catch(() => {});
@@ -75,11 +84,53 @@ function AdminPanel() {
     } catch (err: any) { toast.error(err.message); }
   };
 
+  const unarchiveCourse = async (id: string) => {
+    try {
+      await adminApi.unarchiveCourse(id);
+      toast.success("Kurs arşivden çıkarıldı");
+      adminApi.courses().then(setCourses).catch(() => {});
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const openEdit = (c: any) => {
+    setEditing(c);
+    setEditForm({
+      title: c.title ?? "",
+      description: c.description ?? "",
+      category: c.category ?? "",
+      level: c.level ?? "BEGINNER",
+      status: c.status ?? "DRAFT",
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!editing) return;
+    try {
+      await adminApi.updateCourse(editing.id, editForm);
+      toast.success("Kurs güncellendi");
+      setEditing(null);
+      adminApi.courses().then(setCourses).catch(() => {});
+    } catch (err: any) { toast.error(err.message); }
+  };
+
   const roleColors: Record<string, string> = {
     STUDENT: "bg-blue-100 text-blue-700",
     INSTRUCTOR: "bg-violet-100 text-violet-700",
     ADMIN: "bg-rose-100 text-rose-700",
   };
+
+  const roleData = stats ? [
+    { name: "Öğrenci", value: stats.students },
+    { name: "Eğitmen", value: stats.instructors },
+    { name: "Admin", value: Math.max(0, stats.users - stats.students - stats.instructors) },
+  ] : [];
+
+  const overviewData = stats ? [
+    { label: "Kurs", val: stats.courses },
+    { label: "Kayıt", val: stats.enrollments },
+    { label: "Sertifika", val: stats.certificates },
+    { label: "Sınav", val: stats.attempts },
+  ] : [];
 
   return (
     <div className="min-h-screen bg-background">
@@ -95,7 +146,6 @@ function AdminPanel() {
           </div>
         </div>
 
-        {/* İstatistik kartları */}
         {stats && (
           <div className="space-y-4">
             <h2 className="text-lg font-semibold">Platform İstatistikleri</h2>
@@ -118,33 +168,38 @@ function AdminPanel() {
                 <Progress value={stats.passRate ?? 0} className="h-2" />
               </Card>
 
-              <Card className="p-5 space-y-3">
-                <div className="text-sm font-semibold">Kullanıcı Dağılımı</div>
-                <div className="space-y-2">
-                  {[
-                    { label: "Öğrenci", value: stats.students, total: stats.users, color: "bg-blue-500" },
-                    { label: "Eğitmen", value: stats.instructors, total: stats.users, color: "bg-violet-500" },
-                  ].map((r) => (
-                    <div key={r.label} className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">{r.label}</span>
-                        <span className="font-semibold">{r.value} <span className="text-muted-foreground font-normal">(%{stats.users > 0 ? Math.round((r.value / stats.users) * 100) : 0})</span></span>
-                      </div>
-                      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${r.color}`}
-                          style={{ width: `${stats.users > 0 ? (r.value / stats.users) * 100 : 0}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+              <Card className="p-5">
+                <div className="text-sm font-semibold mb-2">Kullanıcı Dağılımı</div>
+                <div className="h-44">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={roleData} dataKey="value" nameKey="name" innerRadius={40} outerRadius={70} label>
+                        {roleData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <Legend />
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
                 </div>
               </Card>
             </div>
+
+            <Card className="p-5">
+              <div className="text-sm font-semibold mb-3">Genel Bakış</div>
+              <div className="h-56">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={overviewData}>
+                    <XAxis dataKey="label" />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Bar dataKey="val" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Card>
           </div>
         )}
 
-        {/* Tab seçimi */}
         <div className="flex gap-2 border-b pb-0">
           {(["users", "courses"] as const).map((t) => (
             <button
@@ -212,7 +267,7 @@ function AdminPanel() {
                   <TableHead>Eğitmen</TableHead>
                   <TableHead>Kayıt</TableHead>
                   <TableHead>Durum</TableHead>
-                  <TableHead className="w-28"></TableHead>
+                  <TableHead className="w-44 text-right">İşlem</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -231,8 +286,16 @@ function AdminPanel() {
                         {c.status === "PUBLISHED" ? "Yayında" : c.status === "DRAFT" ? "Taslak" : "Arşiv"}
                       </Badge>
                     </TableCell>
-                    <TableCell>
-                      {c.status !== "ARCHIVED" && (
+                    <TableCell className="text-right space-x-1">
+                      <Button size="sm" variant="outline" onClick={() => openEdit(c)}>
+                        <Pencil className="w-3 h-3 mr-1" /> Düzenle
+                      </Button>
+                      {c.status === "ARCHIVED" ? (
+                        <Button size="sm" variant="outline" className="text-green-700 border-green-300"
+                          onClick={() => unarchiveCourse(c.id)}>
+                          <ArchiveRestore className="w-3 h-3 mr-1" /> Aktif
+                        </Button>
+                      ) : (
                         <Button size="sm" variant="outline" className="text-destructive border-destructive/30 hover:bg-destructive/5"
                           onClick={() => archiveCourse(c.id)}>
                           Arşivle
@@ -246,6 +309,56 @@ function AdminPanel() {
           </Card>
         )}
       </main>
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Kursu Düzenle</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Başlık</Label>
+              <Input value={editForm.title} onChange={(e) => setEditForm({ ...editForm, title: e.target.value })} />
+            </div>
+            <div>
+              <Label>Açıklama</Label>
+              <Textarea rows={3} value={editForm.description} onChange={(e) => setEditForm({ ...editForm, description: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Kategori</Label>
+                <Input value={editForm.category} onChange={(e) => setEditForm({ ...editForm, category: e.target.value })} />
+              </div>
+              <div>
+                <Label>Seviye</Label>
+                <Select value={editForm.level} onValueChange={(v) => setEditForm({ ...editForm, level: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="BEGINNER">Başlangıç</SelectItem>
+                    <SelectItem value="INTERMEDIATE">Orta</SelectItem>
+                    <SelectItem value="ADVANCED">İleri</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label>Durum</Label>
+              <Select value={editForm.status} onValueChange={(v) => setEditForm({ ...editForm, status: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DRAFT">Taslak</SelectItem>
+                  <SelectItem value="PUBLISHED">Yayında</SelectItem>
+                  <SelectItem value="ARCHIVED">Arşiv</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>İptal</Button>
+            <Button className="bg-violet-600 hover:bg-violet-700" onClick={saveEdit}>Kaydet</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

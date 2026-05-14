@@ -1,6 +1,6 @@
 import { createFileRoute, Link, Navigate, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
-import { Lock, CheckCircle2, Circle, FileText, MessageSquare, Send, PlayCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Lock, CheckCircle2, Circle, FileText, MessageSquare, Send, PlayCircle, NotebookPen, Save, CornerDownRight } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/lib/auth";
-import { courses as coursesApi, lessons as lessonsApi, interactions } from "@/lib/api";
+import { courses as coursesApi, lessons as lessonsApi, interactions, notes as notesApi } from "@/lib/api";
 
 export const Route = createFileRoute("/learn/$courseId")({
   component: LearnPage,
@@ -17,6 +17,17 @@ export const Route = createFileRoute("/learn/$courseId")({
     ...(s.lessonId ? { lessonId: s.lessonId as string } : {}),
   }),
 });
+
+function getEmbedUrl(url: string): string | null {
+  if (!url) return null;
+  // YouTube
+  const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([\w-]{11})/);
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}`;
+  // Vimeo
+  const vm = url.match(/vimeo\.com\/(\d+)/);
+  if (vm) return `https://player.vimeo.com/video/${vm[1]}`;
+  return null;
+}
 
 function LearnPage() {
   const { courseId } = Route.useParams();
@@ -30,7 +41,12 @@ function LearnPage() {
   const [activeLessonId, setActiveLessonId] = useState<string | null>(initialLessonId ?? null);
   const [comments, setComments] = useState<any[]>([]);
   const [commentText, setCommentText] = useState("");
+  const [replyTo, setReplyTo] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [noteText, setNoteText] = useState("");
+  const [noteSaving, setNoteSaving] = useState(false);
   const [fetching, setFetching] = useState(true);
+  const noteTimer = useRef<any>(null);
 
   const loadCurriculum = () => {
     coursesApi.curriculum(courseId)
@@ -55,6 +71,20 @@ function LearnPage() {
   useEffect(() => {
     if (currentLesson?.id) {
       interactions.getComments(currentLesson.id).then(setComments).catch(() => {});
+      notesApi.get(currentLesson.id).then((n) => setNoteText(n?.text ?? "")).catch(() => setNoteText(""));
+      // ders meta — videoUrl için tekrar fetch
+      lessonsApi.get(currentLesson.id).then((full) => {
+        setCurriculum((prev: any) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            modules: prev.modules.map((m: any) => ({
+              ...m,
+              lessons: m.lessons.map((l: any) => l.id === currentLesson.id ? { ...l, videoUrl: full.videoUrl, content: full.content } : l),
+            })),
+          };
+        });
+      }).catch(() => {});
     }
   }, [currentLesson?.id]);
 
@@ -87,10 +117,40 @@ function LearnPage() {
     } catch (err: any) { toast.error(err.message); }
   };
 
+  const onReply = async (parentId: string) => {
+    if (!replyText.trim()) return;
+    try {
+      await interactions.replyComment(parentId, { text: replyText.trim() });
+      setReplyText("");
+      setReplyTo(null);
+      interactions.getComments(currentLesson.id).then(setComments).catch(() => {});
+    } catch (err: any) { toast.error(err.message); }
+  };
+
+  const saveNote = async (text: string) => {
+    if (!currentLesson) return;
+    setNoteSaving(true);
+    try {
+      await notesApi.upsert(currentLesson.id, text);
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setNoteSaving(false);
+    }
+  };
+
+  const onNoteChange = (text: string) => {
+    setNoteText(text);
+    if (noteTimer.current) clearTimeout(noteTimer.current);
+    noteTimer.current = setTimeout(() => saveNote(text), 800);
+  };
+
+  const embedUrl = currentLesson?.videoUrl ? getEmbedUrl(currentLesson.videoUrl) : null;
+
   return (
     <div className="min-h-screen bg-background">
       <AppHeader />
-      <div className="max-w-7xl mx-auto px-4 lg:px-6 py-6 grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
+      <div className="max-w-[1500px] mx-auto px-4 lg:px-6 py-6 grid grid-cols-1 lg:grid-cols-[280px_1fr_320px] gap-6">
         {/* Sidebar */}
         <aside className="space-y-3">
           <Card className="p-4">
@@ -171,26 +231,38 @@ function LearnPage() {
         </aside>
 
         {/* Lesson Content */}
-        <main className="space-y-4">
+        <main className="space-y-4 min-w-0">
           {currentLesson && (
             <>
               <Card className="overflow-hidden p-0">
-                <div className="aspect-video bg-gradient-to-br from-black via-zinc-900 to-zinc-800 flex items-center justify-center relative group">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.05),transparent_70%)]" />
-                  <button
-                    onClick={() => !currentLesson.isCompleted && onComplete(currentLesson.id)}
-                    className="relative z-10 flex flex-col items-center gap-3 text-white/90 hover:text-white transition-transform hover:scale-105"
-                  >
-                    <div className="w-20 h-20 rounded-full bg-primary/90 flex items-center justify-center shadow-2xl shadow-primary/30">
-                      <PlayCircle className="w-12 h-12" />
-                    </div>
-                    <span className="text-sm font-medium">Videoyu Oynat</span>
-                  </button>
-                  <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-xs text-white/70">
-                    <span className="px-2 py-1 rounded bg-black/40 backdrop-blur">Modül {currentLesson._mi + 1}</span>
-                    <span className="px-2 py-1 rounded bg-black/40 backdrop-blur">{currentLesson.estimatedDuration}:00</span>
+                {embedUrl ? (
+                  <div className="aspect-video bg-black">
+                    <iframe
+                      src={embedUrl}
+                      title={currentLesson.title}
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                      allowFullScreen
+                      className="w-full h-full border-0"
+                    />
                   </div>
-                </div>
+                ) : (
+                  <div className="aspect-video bg-gradient-to-br from-black via-zinc-900 to-zinc-800 flex items-center justify-center relative group">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(255,255,255,0.05),transparent_70%)]" />
+                    <button
+                      onClick={() => !currentLesson.isCompleted && onComplete(currentLesson.id)}
+                      className="relative z-10 flex flex-col items-center gap-3 text-white/90 hover:text-white transition-transform hover:scale-105"
+                    >
+                      <div className="w-20 h-20 rounded-full bg-primary/90 flex items-center justify-center shadow-2xl shadow-primary/30">
+                        <PlayCircle className="w-12 h-12" />
+                      </div>
+                      <span className="text-sm font-medium">Videoyu Oynat</span>
+                    </button>
+                    <div className="absolute bottom-3 left-4 right-4 flex items-center justify-between text-xs text-white/70">
+                      <span className="px-2 py-1 rounded bg-black/40 backdrop-blur">Modül {currentLesson._mi + 1}</span>
+                      <span className="px-2 py-1 rounded bg-black/40 backdrop-blur">{currentLesson.estimatedDuration}:00</span>
+                    </div>
+                  </div>
+                )}
               </Card>
 
               <Card className="p-6">
@@ -221,7 +293,7 @@ function LearnPage() {
                   <Textarea value={commentText} onChange={(e) => setCommentText(e.target.value)} placeholder="Bir yorum veya soru yaz..." rows={2} />
                   <Button onClick={onComment} size="icon"><Send className="w-4 h-4" /></Button>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {comments.map((c: any) => (
                     <div key={c.id} className="border-l-2 border-accent/40 pl-3">
                       <div className="text-sm flex items-center gap-2">
@@ -230,6 +302,40 @@ function LearnPage() {
                         <span className="text-xs text-muted-foreground">{new Date(c.createdAt).toLocaleString("tr-TR")}</span>
                       </div>
                       <p className="text-sm text-muted-foreground mt-1">{c.text}</p>
+
+                      <button
+                        className="mt-1 text-xs text-violet-600 hover:underline flex items-center gap-1"
+                        onClick={() => { setReplyTo(replyTo === c.id ? null : c.id); setReplyText(""); }}
+                      >
+                        <CornerDownRight className="w-3 h-3" /> Yanıtla
+                      </button>
+
+                      {replyTo === c.id && (
+                        <div className="flex gap-2 mt-2">
+                          <Textarea
+                            value={replyText}
+                            onChange={(e) => setReplyText(e.target.value)}
+                            placeholder="Yanıt yaz..."
+                            rows={2}
+                          />
+                          <Button size="icon" onClick={() => onReply(c.id)}><Send className="w-4 h-4" /></Button>
+                        </div>
+                      )}
+
+                      {c.replies?.length > 0 && (
+                        <div className="mt-3 ml-4 space-y-3 border-l border-accent/30 pl-3">
+                          {c.replies.map((r: any) => (
+                            <div key={r.id}>
+                              <div className="text-sm flex items-center gap-2">
+                                <span className="font-semibold">{r.user?.name}</span>
+                                {r.user?.role === "INSTRUCTOR" && <Badge variant="secondary" className="text-[10px] px-1.5 bg-violet-100 text-violet-700">Eğitmen</Badge>}
+                                <span className="text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString("tr-TR")}</span>
+                              </div>
+                              <p className="text-sm text-muted-foreground mt-1">{r.text}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   ))}
                   {comments.length === 0 && (
@@ -240,6 +346,36 @@ function LearnPage() {
             </>
           )}
         </main>
+
+        {/* Right sidebar: Notes */}
+        <aside className="space-y-3">
+          <Card className="p-4 sticky top-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-semibold flex items-center gap-2">
+                <NotebookPen className="w-4 h-4 text-violet-600" /> Not Defterim
+              </h3>
+              {noteSaving ? (
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
+                  <Save className="w-3 h-3 animate-pulse" /> kaydediliyor
+                </span>
+              ) : noteText.length > 0 ? (
+                <span className="text-xs text-green-600 flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3" /> kayıtlı
+                </span>
+              ) : null}
+            </div>
+            <Textarea
+              value={noteText}
+              onChange={(e) => onNoteChange(e.target.value)}
+              placeholder="Bu ders için notlarını yaz... Otomatik kaydedilir."
+              rows={18}
+              className="resize-none text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground mt-2">
+              Notların sana özeldir, her derste ayrı kaydedilir.
+            </p>
+          </Card>
+        </aside>
       </div>
     </div>
   );

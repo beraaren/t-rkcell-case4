@@ -35,6 +35,7 @@ export function AppHeader() {
           <nav className="flex items-center gap-1">
             {navLink("/courses", "Katalog")}
             {user.role === "STUDENT" && navLink("/my-courses", "Kurslarım")}
+            {navLink("/leaderboard", "Liderlik")}
             {user.role === "INSTRUCTOR" && navLink("/instructor", "Eğitmen Panel")}
             {user.role === "ADMIN" && navLink("/admin", "Admin")}
             {navLink("/profile", "Profil")}

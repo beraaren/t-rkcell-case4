@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { useAuth } from "@/lib/auth";
 import { admin as adminApi } from "@/lib/api";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, CartesianGrid } from "recharts";
 
 export const Route = createFileRoute("/instructor")({ component: InstructorPanel });
 
@@ -84,6 +85,31 @@ function InstructorPanel() {
           />
         </div>
 
+        {courses.length > 0 && (
+          <Card className="p-5">
+            <h3 className="font-semibold mb-3">Kurs Performansı</h3>
+            <div className="h-64">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={courses.map((c: any) => ({
+                  name: c.title.length > 18 ? c.title.slice(0, 18) + "…" : c.title,
+                  Kayıt: c.enrollments,
+                  Tamamlama: c.completionRate,
+                  Geçme: c.examPassRate ?? 0,
+                }))}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="Kayıt" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Tamamlama" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Geçme" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </Card>
+        )}
+
         {/* Kurs listesi */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold flex items-center gap-2">
@@ -135,11 +161,18 @@ function InstructorPanel() {
                       </div>
                     </div>
 
-                    <Link to="/courses/$id" params={{ id: c.id }}>
-                      <Button variant="outline" size="sm">
-                        Görüntüle <ChevronRight className="w-4 h-4 ml-1" />
-                      </Button>
-                    </Link>
+                    <div className="flex flex-col gap-1.5">
+                      <Link to="/instructor/$courseId" params={{ courseId: c.id }}>
+                        <Button size="sm" className="bg-violet-600 hover:bg-violet-700 w-full">
+                          Düzenle
+                        </Button>
+                      </Link>
+                      <Link to="/courses/$id" params={{ id: c.id }}>
+                        <Button variant="outline" size="sm" className="w-full">
+                          Görüntüle <ChevronRight className="w-4 h-4 ml-1" />
+                        </Button>
+                      </Link>
+                    </div>
                   </div>
                 </Card>
               ))}

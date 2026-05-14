@@ -1,6 +1,7 @@
 import { createFileRoute, Navigate, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Star, Clock, BookOpen, Lock, CheckCircle2, Users, Trophy, ChevronDown, ChevronUp, FileText } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Star, Clock, BookOpen, Lock, CheckCircle2, Users, Trophy, ChevronDown, ChevronUp, FileText, Sparkles, Briefcase } from "lucide-react";
 import { toast } from "sonner";
 import { AppHeader } from "@/components/AppHeader";
 import { Button } from "@/components/ui/button";
@@ -25,11 +26,13 @@ function CourseDetail() {
   const [reviewText, setReviewText] = useState("");
   const [fetching, setFetching] = useState(true);
   const [expandedModules, setExpandedModules] = useState<Set<string>>(new Set());
+  const [recommended, setRecommended] = useState<any[]>([]);
 
   const loadData = () => {
     coursesApi.get(id).then(setCourse).catch(() => {});
     if (user) coursesApi.curriculum(id).then(setCurriculum).catch(() => {});
     interactions.getReviews(id).then(setReviews).catch(() => {});
+    coursesApi.recommendations(id, 4).then(setRecommended).catch(() => {});
     setFetching(false);
   };
 
@@ -55,6 +58,11 @@ function CourseDetail() {
     ? modules.reduce((s: number, m: any) => s + (m.lessons ?? []).filter((l: any) => l.isCompleted).length, 0)
     : 0;
   const progressPct = totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+
+  const allExamsPassed = modules.every((m: any) => !m.exam || m.exam.passed);
+  const courseCompleted = enrolled && totalLessons > 0 && completedLessons === totalLessons && allExamsPassed;
+  const rawExp = course.instructor?.meta?.expertise;
+  const instructorExpertise: string | undefined = Array.isArray(rawExp) ? rawExp.join(" · ") : (rawExp ?? undefined);
 
   const onEnroll = async () => {
     try {
@@ -238,12 +246,41 @@ function CourseDetail() {
             </div>
             <div>
               <div className="font-semibold text-lg">{course.instructorName ?? course.instructor?.name}</div>
+              {instructorExpertise && (
+                <div className="flex items-center gap-1.5 text-sm text-violet-600 mt-1">
+                  <Briefcase className="w-3.5 h-3.5" /> {instructorExpertise}
+                </div>
+              )}
               {course.instructor?.bio && (
                 <p className="text-sm text-muted-foreground mt-1">{course.instructor.bio}</p>
               )}
             </div>
           </div>
         </Card>
+
+        {/* Önerilen Kurslar */}
+        {recommended.length > 0 && (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-violet-600" /> Önerilen Kurslar
+            </h2>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {recommended.map((r: any) => (
+                <Link key={r.id} to="/courses/$id" params={{ id: r.id }}>
+                  <Card className="p-4 hover:border-violet-500 transition-colors h-full flex flex-col">
+                    <div className="aspect-video rounded bg-gradient-to-br from-violet-100 to-violet-200 mb-3 flex items-center justify-center text-3xl">📚</div>
+                    <Badge variant="secondary" className="self-start text-[10px]">{r.category}</Badge>
+                    <div className="font-semibold mt-2 line-clamp-2">{r.title}</div>
+                    <div className="text-xs text-muted-foreground mt-auto pt-2 flex items-center justify-between">
+                      <span>{r.instructor?.name}</span>
+                      <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {r._count?.enrollments ?? 0}</span>
+                    </div>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Değerlendirmeler */}
         <Card className="p-6 space-y-5">
@@ -264,9 +301,11 @@ function CourseDetail() {
             )}
           </div>
 
-          {enrolled && (
+          {enrolled && courseCompleted && (
             <div className="border rounded-lg p-4 space-y-3 bg-muted/20">
-              <p className="text-sm font-medium">Değerlendirmeni ekle</p>
+              <p className="text-sm font-medium flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-green-500" /> Kursu tamamladın — değerlendirmeni ekle
+              </p>
               <div className="flex items-center gap-1">
                 {[1,2,3,4,5].map((n) => (
                   <button key={n} onClick={() => setRating(n)}>
@@ -276,6 +315,11 @@ function CourseDetail() {
               </div>
               <Textarea value={reviewText} onChange={(e) => setReviewText(e.target.value)} placeholder="Deneyimini paylaş…" rows={2} />
               <Button size="sm" className="bg-violet-600 hover:bg-violet-700" onClick={onReview}>Gönder</Button>
+            </div>
+          )}
+          {enrolled && !courseCompleted && (
+            <div className="border rounded-lg p-3 bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900 text-xs text-amber-700 dark:text-amber-300">
+              Değerlendirme yapabilmek için tüm dersleri tamamlayıp modül sınavlarını geçmen gerekir.
             </div>
           )}
 

@@ -102,6 +102,9 @@ export const courses = {
 
   enroll: (id: string) =>
     request<any>(`/courses/${id}/enroll`, { method: "POST" }),
+
+  recommendations: (id: string, limit = 4) =>
+    request<any[]>(`/courses/${id}/recommendations?limit=${limit}`),
 };
 
 // ── MODULES ───────────────────────────────────────────────────────────
@@ -112,6 +115,11 @@ export const modules = {
 
   create: (courseId: string, body: any) =>
     request<any>(`/courses/${courseId}/modules`, { method: "POST", body: JSON.stringify(body) }),
+};
+
+// ── INSTRUCTOR HELPERS ────────────────────────────────────────────────
+export const instructor = {
+  myCourses: () => request<any[]>("/admin/instructor-stats"),
 };
 
 // ── LESSONS ───────────────────────────────────────────────────────────
@@ -158,6 +166,9 @@ export const exams = {
 export const me = {
   courses: () => request<any[]>("/me/courses"),
   certificates: () => request<any[]>("/me/certificates"),
+  updateProfile: (body: { name?: string; bio?: string; expertise?: string; interests?: string[] }) =>
+    request<any>("/me/profile", { method: "PATCH", body: JSON.stringify(body) }),
+  notes: () => request<any[]>("/me/notes"),
 };
 
 // ── CERTIFICATES ──────────────────────────────────────────────────────
@@ -196,5 +207,23 @@ export const admin = {
   },
   archiveCourse: (id: string) =>
     request<any>(`/admin/courses/${id}/archive`, { method: "PATCH" }),
+  unarchiveCourse: (id: string) =>
+    request<any>(`/admin/courses/${id}/unarchive`, { method: "PATCH" }),
+  updateCourse: (id: string, body: any) =>
+    request<any>(`/admin/courses/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   instructorStats: () => request<any[]>("/admin/instructor-stats"),
+};
+
+// ── LEADERBOARD ───────────────────────────────────────────────────────
+export const leaderboard = {
+  get: (limit = 50) => request<any[]>(`/leaderboard?limit=${limit}`),
+};
+
+// ── NOTES ─────────────────────────────────────────────────────────────
+export const notes = {
+  get: (lessonId: string) => request<any>(`/lessons/${lessonId}/notes`),
+  upsert: (lessonId: string, text: string) =>
+    request<any>(`/lessons/${lessonId}/notes`, { method: "PUT", body: JSON.stringify({ text }) }),
+  remove: (lessonId: string) =>
+    request<any>(`/lessons/${lessonId}/notes`, { method: "DELETE" }),
 };

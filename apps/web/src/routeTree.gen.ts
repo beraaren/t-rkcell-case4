@@ -13,12 +13,14 @@ import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ProfileRouteImport } from './routes/profile'
 import { Route as MyCoursesRouteImport } from './routes/my-courses'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as LeaderboardRouteImport } from './routes/leaderboard'
 import { Route as InstructorRouteImport } from './routes/instructor'
 import { Route as CoursesRouteImport } from './routes/courses'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as VerifyNumberRouteImport } from './routes/verify.$number'
 import { Route as LearnCourseIdRouteImport } from './routes/learn.$courseId'
+import { Route as InstructorCourseIdRouteImport } from './routes/instructor.$courseId'
 import { Route as CoursesIdRouteImport } from './routes/courses.$id'
 import { Route as LearnCourseIdExamExamIdRouteImport } from './routes/learn.$courseId.exam.$examId'
 import { Route as LearnCourseIdExamExamIdResultRouteImport } from './routes/learn.$courseId.exam.$examId.result'
@@ -41,6 +43,11 @@ const MyCoursesRoute = MyCoursesRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LeaderboardRoute = LeaderboardRouteImport.update({
+  id: '/leaderboard',
+  path: '/leaderboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InstructorRoute = InstructorRouteImport.update({
@@ -73,6 +80,11 @@ const LearnCourseIdRoute = LearnCourseIdRouteImport.update({
   path: '/learn/$courseId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InstructorCourseIdRoute = InstructorCourseIdRouteImport.update({
+  id: '/$courseId',
+  path: '/$courseId',
+  getParentRoute: () => InstructorRoute,
+} as any)
 const CoursesIdRoute = CoursesIdRouteImport.update({
   id: '/$id',
   path: '/$id',
@@ -94,12 +106,14 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/courses': typeof CoursesRouteWithChildren
-  '/instructor': typeof InstructorRoute
+  '/instructor': typeof InstructorRouteWithChildren
+  '/leaderboard': typeof LeaderboardRoute
   '/login': typeof LoginRoute
   '/my-courses': typeof MyCoursesRoute
   '/profile': typeof ProfileRoute
   '/register': typeof RegisterRoute
   '/courses/$id': typeof CoursesIdRoute
+  '/instructor/$courseId': typeof InstructorCourseIdRoute
   '/learn/$courseId': typeof LearnCourseIdRouteWithChildren
   '/verify/$number': typeof VerifyNumberRoute
   '/learn/$courseId/exam/$examId': typeof LearnCourseIdExamExamIdRouteWithChildren
@@ -109,12 +123,14 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/courses': typeof CoursesRouteWithChildren
-  '/instructor': typeof InstructorRoute
+  '/instructor': typeof InstructorRouteWithChildren
+  '/leaderboard': typeof LeaderboardRoute
   '/login': typeof LoginRoute
   '/my-courses': typeof MyCoursesRoute
   '/profile': typeof ProfileRoute
   '/register': typeof RegisterRoute
   '/courses/$id': typeof CoursesIdRoute
+  '/instructor/$courseId': typeof InstructorCourseIdRoute
   '/learn/$courseId': typeof LearnCourseIdRouteWithChildren
   '/verify/$number': typeof VerifyNumberRoute
   '/learn/$courseId/exam/$examId': typeof LearnCourseIdExamExamIdRouteWithChildren
@@ -125,12 +141,14 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRoute
   '/courses': typeof CoursesRouteWithChildren
-  '/instructor': typeof InstructorRoute
+  '/instructor': typeof InstructorRouteWithChildren
+  '/leaderboard': typeof LeaderboardRoute
   '/login': typeof LoginRoute
   '/my-courses': typeof MyCoursesRoute
   '/profile': typeof ProfileRoute
   '/register': typeof RegisterRoute
   '/courses/$id': typeof CoursesIdRoute
+  '/instructor/$courseId': typeof InstructorCourseIdRoute
   '/learn/$courseId': typeof LearnCourseIdRouteWithChildren
   '/verify/$number': typeof VerifyNumberRoute
   '/learn/$courseId/exam/$examId': typeof LearnCourseIdExamExamIdRouteWithChildren
@@ -143,11 +161,13 @@ export interface FileRouteTypes {
     | '/admin'
     | '/courses'
     | '/instructor'
+    | '/leaderboard'
     | '/login'
     | '/my-courses'
     | '/profile'
     | '/register'
     | '/courses/$id'
+    | '/instructor/$courseId'
     | '/learn/$courseId'
     | '/verify/$number'
     | '/learn/$courseId/exam/$examId'
@@ -158,11 +178,13 @@ export interface FileRouteTypes {
     | '/admin'
     | '/courses'
     | '/instructor'
+    | '/leaderboard'
     | '/login'
     | '/my-courses'
     | '/profile'
     | '/register'
     | '/courses/$id'
+    | '/instructor/$courseId'
     | '/learn/$courseId'
     | '/verify/$number'
     | '/learn/$courseId/exam/$examId'
@@ -173,11 +195,13 @@ export interface FileRouteTypes {
     | '/admin'
     | '/courses'
     | '/instructor'
+    | '/leaderboard'
     | '/login'
     | '/my-courses'
     | '/profile'
     | '/register'
     | '/courses/$id'
+    | '/instructor/$courseId'
     | '/learn/$courseId'
     | '/verify/$number'
     | '/learn/$courseId/exam/$examId'
@@ -188,7 +212,8 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRoute
   CoursesRoute: typeof CoursesRouteWithChildren
-  InstructorRoute: typeof InstructorRoute
+  InstructorRoute: typeof InstructorRouteWithChildren
+  LeaderboardRoute: typeof LeaderboardRoute
   LoginRoute: typeof LoginRoute
   MyCoursesRoute: typeof MyCoursesRoute
   ProfileRoute: typeof ProfileRoute
@@ -225,6 +250,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/leaderboard': {
+      id: '/leaderboard'
+      path: '/leaderboard'
+      fullPath: '/leaderboard'
+      preLoaderRoute: typeof LeaderboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/instructor': {
@@ -269,6 +301,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LearnCourseIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/instructor/$courseId': {
+      id: '/instructor/$courseId'
+      path: '/$courseId'
+      fullPath: '/instructor/$courseId'
+      preLoaderRoute: typeof InstructorCourseIdRouteImport
+      parentRoute: typeof InstructorRoute
+    }
     '/courses/$id': {
       id: '/courses/$id'
       path: '/$id'
@@ -304,6 +343,18 @@ const CoursesRouteChildren: CoursesRouteChildren = {
 const CoursesRouteWithChildren =
   CoursesRoute._addFileChildren(CoursesRouteChildren)
 
+interface InstructorRouteChildren {
+  InstructorCourseIdRoute: typeof InstructorCourseIdRoute
+}
+
+const InstructorRouteChildren: InstructorRouteChildren = {
+  InstructorCourseIdRoute: InstructorCourseIdRoute,
+}
+
+const InstructorRouteWithChildren = InstructorRoute._addFileChildren(
+  InstructorRouteChildren,
+)
+
 interface LearnCourseIdExamExamIdRouteChildren {
   LearnCourseIdExamExamIdResultRoute: typeof LearnCourseIdExamExamIdResultRoute
 }
@@ -334,7 +385,8 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRoute,
   CoursesRoute: CoursesRouteWithChildren,
-  InstructorRoute: InstructorRoute,
+  InstructorRoute: InstructorRouteWithChildren,
+  LeaderboardRoute: LeaderboardRoute,
   LoginRoute: LoginRoute,
   MyCoursesRoute: MyCoursesRoute,
   ProfileRoute: ProfileRoute,
@@ -345,13 +397,3 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
