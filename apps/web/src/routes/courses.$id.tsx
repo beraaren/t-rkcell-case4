@@ -139,7 +139,17 @@ function CourseDetail() {
 
   const isArchived = course?.status === "ARCHIVED";
 
+  const isInstructor = user?.role === "INSTRUCTOR" || user?.role === "ADMIN";
+
   const CTAButton = ({ className }: { className?: string }) => {
+    if (isInstructor) {
+      return (
+        <Button className={`bg-violet-600 hover:bg-violet-700 ${className ?? ""}`}
+          onClick={() => nav({ to: "/learn/$courseId", params: { courseId: id } })}>
+          Görüntüle
+        </Button>
+      );
+    }
     if (isArchived && !enrolled) {
       return (
         <Button disabled className={`bg-zinc-500 ${className ?? ""}`}>
@@ -171,6 +181,13 @@ function CourseDetail() {
   };
 
   const StatusLabel = () => {
+    if (isInstructor) {
+      return (
+        <div className="text-xs font-semibold flex items-center gap-1.5 text-violet-700 dark:text-violet-300 bg-violet-500/10 border border-violet-500/30 rounded-full px-2.5 py-1 w-fit">
+          Eğitmen
+        </div>
+      );
+    }
     if (courseCompleted) {
       return (
         <div className="text-xs font-semibold flex items-center gap-1.5 text-green-700 dark:text-green-400 bg-green-500/10 border border-green-500/30 rounded-full px-2.5 py-1 w-fit">
@@ -465,7 +482,7 @@ function CourseDetail() {
             </div>
           )}
 
-          {!enrolled && (
+          {!enrolled && !isInstructor && (
             <div className="border rounded-lg p-3 bg-muted/40 text-xs text-muted-foreground">
               Değerlendirme yazabilmek için kursa kaydolman gerekir.
             </div>
